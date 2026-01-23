@@ -17,6 +17,7 @@ import {
   type PaymentFrequency,
 } from '../utils/constants';
 import { downloadLeasePDF } from '../utils/pdfGenerator';
+import { decodeVIN, type VehicleInfo } from '../utils/vinDecoder';
 
 interface FormState {
   state: SupportedState;
@@ -25,6 +26,36 @@ interface FormState {
   docFee: string;
   downPayment: string;
   paymentFrequency: PaymentFrequency;
+}
+
+interface VehicleState {
+  vin: string;
+  odometer: string;
+  year: string;
+  make: string;
+  model: string;
+  bodyStyle: string;
+}
+
+interface CustomerState {
+  lesseeName: string;
+  lesseeAddress: string;
+  lesseeCity: string;
+  lesseeState: string;
+  lesseeZip: string;
+  lesseePhone: string;
+  coLesseeName: string;
+  coLesseeAddress: string;
+  coLesseeCity: string;
+  coLesseeState: string;
+  coLesseeZip: string;
+  coLesseePhone: string;
+}
+
+export interface ContractData {
+  calculation: DealCalculation;
+  vehicle: VehicleState;
+  customer: CustomerState;
 }
 
 const STATES: { value: SupportedState; label: string }[] = [
@@ -49,8 +80,35 @@ export function DealCalculator() {
     paymentFrequency: 'biweekly',
   });
 
+  const [vehicle, setVehicle] = useState<VehicleState>({
+    vin: '',
+    odometer: '',
+    year: '',
+    make: '',
+    model: '',
+    bodyStyle: '',
+  });
+
+  const [customer, setCustomer] = useState<CustomerState>({
+    lesseeName: '',
+    lesseeAddress: '',
+    lesseeCity: '',
+    lesseeState: '',
+    lesseeZip: '',
+    lesseePhone: '',
+    coLesseeName: '',
+    coLesseeAddress: '',
+    coLesseeCity: '',
+    coLesseeState: '',
+    coLesseeZip: '',
+    coLesseePhone: '',
+  });
+
   const [autoTermApplied, setAutoTermApplied] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isDecodingVin, setIsDecodingVin] = useState(false);
+  const [vinError, setVinError] = useState<string | null>(null);
+  const [vinSuccess, setVinSuccess] = useState(false);
 
   // Parse form values
   const acv = parseFloat(form.acv.replace(/[^0-9.]/g, '')) || 0;
@@ -103,11 +161,61 @@ export function DealCalculator() {
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
   };
 
+  const handleVehicleChange = (field: keyof VehicleState) => (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setVehicle((prev) => ({ ...prev, [field]: e.target.value }));
+    if (field === 'vin') {
+      setVinError(null);
+      setVinSuccess(false);
+    }
+  };
+
+  const handleCustomerChange = (field: keyof CustomerState) => (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    setCustomer((prev) => ({ ...prev, [field]: e.target.value }));
+  };
+
   // Format currency input on blur
   const handleCurrencyBlur = (field: 'acv' | 'docFee' | 'downPayment') => () => {
     const value = parseFloat(form[field].replace(/[^0-9.]/g, '')) || 0;
     if (value >= 0) {
       setForm((prev) => ({ ...prev, [field]: value.toFixed(2) }));
+    }
+  };
+
+  // Decode VIN
+  const handleDecodeVin = async () => {
+    if (!vehicle.vin.trim()) {
+      setVinError('Please enter a VIN');
+      return;
+    }
+
+    setIsDecodingVin(true);
+    setVinError(null);
+    setVinSuccess(false);
+
+    try {
+      const result: VehicleInfo = await decodeVIN(vehicle.vin);
+
+      if (result.isValid) {
+        setVehicle((prev) => ({
+          ...prev,
+          vin: result.vin,
+          year: result.year,
+          make: result.make,
+          model: result.model,
+          bodyStyle: result.bodyStyle,
+        }));
+        setVinSuccess(true);
+      } else {
+        setVinError(result.errorMessage || 'Invalid VIN');
+      }
+    } catch (error) {
+      setVinError('Failed to decode VIN');
+    } finally {
+      setIsDecodingVin(false);
     }
   };
 
@@ -117,7 +225,12 @@ export function DealCalculator() {
 
     setIsGenerating(true);
     try {
-      await downloadLeasePDF(calculation);
+      const contractData: ContractData = {
+        calculation,
+        vehicle,
+        customer,
+      };
+      await downloadLeasePDF(contractData);
     } catch (error) {
       console.error('Failed to generate document:', error);
       alert('Failed to generate document. Please try again.');
@@ -132,16 +245,16 @@ export function DealCalculator() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-blue-800 text-white py-5 shadow-lg">
-        <div className="max-w-6xl mx-auto px-4">
+        <div className="max-w-7xl mx-auto px-4">
           <h1 className="text-2xl md:text-3xl font-bold">Car World Lease Calculator</h1>
           <p className="text-blue-200 text-sm mt-1">Dealer Partner Portal</p>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left Side - Form */}
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Deal & Vehicle Info */}
           <div className="space-y-6">
             {/* Deal Information */}
             <div className="bg-white rounded-lg shadow-md p-5">
@@ -152,7 +265,7 @@ export function DealCalculator() {
                 Deal Information
               </h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 {/* State */}
                 <div>
                   <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-1">
@@ -238,9 +351,9 @@ export function DealCalculator() {
                 </div>
 
                 {/* Doc Fee */}
-                <div className="md:col-span-2">
+                <div>
                   <label htmlFor="docFee" className="block text-sm font-medium text-gray-700 mb-1">
-                    Dealer Doc Fee
+                    Doc Fee
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
@@ -256,47 +369,342 @@ export function DealCalculator() {
                     />
                   </div>
                 </div>
+
+                {/* Term */}
+                <div>
+                  <label htmlFor="term" className="block text-sm font-medium text-gray-700 mb-1">
+                    Term (Months)
+                  </label>
+                  <input
+                    id="term"
+                    type="number"
+                    min="1"
+                    max={MAX_TERM_MONTHS}
+                    value={form.termMonths}
+                    onChange={handleInputChange('termMonths')}
+                    placeholder="Auto"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                  />
+                  {validRange && validRange.min > 0 && (
+                    <p className="text-xs text-green-600 mt-1">
+                      Valid: {validRange.min}-{validRange.max}mo
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Lease Term */}
+            {/* Vehicle Information */}
             <div className="bg-white rounded-lg shadow-md p-5">
               <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                 <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
                 </svg>
-                Lease Term
+                Vehicle Information
               </h2>
 
-              <div>
-                <label htmlFor="term" className="block text-sm font-medium text-gray-700 mb-1">
-                  Term (Months)
+              {/* VIN with Decode Button */}
+              <div className="mb-4">
+                <label htmlFor="vin" className="block text-sm font-medium text-gray-700 mb-1">
+                  VIN
                 </label>
-                <input
-                  id="term"
-                  type="number"
-                  min="1"
-                  max={MAX_TERM_MONTHS}
-                  value={form.termMonths}
-                  onChange={handleInputChange('termMonths')}
-                  placeholder="Auto-calculated"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 text-lg font-medium"
-                />
-                {validRange && validRange.min > 0 && (
-                  <p className="text-xs text-green-600 mt-1 font-medium">
-                    Valid range: {validRange.min} - {validRange.max} months
-                  </p>
+                <div className="flex gap-2">
+                  <input
+                    id="vin"
+                    type="text"
+                    maxLength={17}
+                    value={vehicle.vin}
+                    onChange={handleVehicleChange('vin')}
+                    placeholder="Enter 17-character VIN"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 uppercase"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleDecodeVin}
+                    disabled={isDecodingVin}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 font-medium text-sm"
+                  >
+                    {isDecodingVin ? 'Decoding...' : 'Decode'}
+                  </button>
+                </div>
+                {vinError && (
+                  <p className="text-xs text-red-600 mt-1">{vinError}</p>
                 )}
-                {validRange && validRange.min === 0 && (
-                  <p className="text-xs text-red-600 mt-1 font-medium">
-                    No valid term range for this ACV
-                  </p>
+                {vinSuccess && (
+                  <p className="text-xs text-green-600 mt-1">VIN decoded successfully</p>
                 )}
-                {!validRange && acv > 0 && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Max: {MAX_TERM_MONTHS} months
-                  </p>
-                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* Year */}
+                <div>
+                  <label htmlFor="year" className="block text-sm font-medium text-gray-700 mb-1">
+                    Year
+                  </label>
+                  <input
+                    id="year"
+                    type="text"
+                    value={vehicle.year}
+                    onChange={handleVehicleChange('year')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                    readOnly
+                  />
+                </div>
+
+                {/* Make */}
+                <div>
+                  <label htmlFor="make" className="block text-sm font-medium text-gray-700 mb-1">
+                    Make
+                  </label>
+                  <input
+                    id="make"
+                    type="text"
+                    value={vehicle.make}
+                    onChange={handleVehicleChange('make')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                    readOnly
+                  />
+                </div>
+
+                {/* Model */}
+                <div>
+                  <label htmlFor="model" className="block text-sm font-medium text-gray-700 mb-1">
+                    Model
+                  </label>
+                  <input
+                    id="model"
+                    type="text"
+                    value={vehicle.model}
+                    onChange={handleVehicleChange('model')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                    readOnly
+                  />
+                </div>
+
+                {/* Body Style */}
+                <div>
+                  <label htmlFor="bodyStyle" className="block text-sm font-medium text-gray-700 mb-1">
+                    Body Style
+                  </label>
+                  <input
+                    id="bodyStyle"
+                    type="text"
+                    value={vehicle.bodyStyle}
+                    onChange={handleVehicleChange('bodyStyle')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                    readOnly
+                  />
+                </div>
+
+                {/* Odometer */}
+                <div className="col-span-2">
+                  <label htmlFor="odometer" className="block text-sm font-medium text-gray-700 mb-1">
+                    Odometer
+                  </label>
+                  <input
+                    id="odometer"
+                    type="text"
+                    inputMode="numeric"
+                    value={vehicle.odometer}
+                    onChange={handleVehicleChange('odometer')}
+                    placeholder="Enter mileage"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Middle Column - Customer Info */}
+          <div className="space-y-6">
+            {/* Lessee Information */}
+            <div className="bg-white rounded-lg shadow-md p-5">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                Lessee (Customer)
+              </h2>
+
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="lesseeName" className="block text-sm font-medium text-gray-700 mb-1">
+                    Full Name
+                  </label>
+                  <input
+                    id="lesseeName"
+                    type="text"
+                    value={customer.lesseeName}
+                    onChange={handleCustomerChange('lesseeName')}
+                    placeholder="John Doe"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="lesseeAddress" className="block text-sm font-medium text-gray-700 mb-1">
+                    Street Address
+                  </label>
+                  <input
+                    id="lesseeAddress"
+                    type="text"
+                    value={customer.lesseeAddress}
+                    onChange={handleCustomerChange('lesseeAddress')}
+                    placeholder="123 Main St"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label htmlFor="lesseeCity" className="block text-sm font-medium text-gray-700 mb-1">
+                      City
+                    </label>
+                    <input
+                      id="lesseeCity"
+                      type="text"
+                      value={customer.lesseeCity}
+                      onChange={handleCustomerChange('lesseeCity')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="lesseeState" className="block text-sm font-medium text-gray-700 mb-1">
+                      State
+                    </label>
+                    <input
+                      id="lesseeState"
+                      type="text"
+                      maxLength={2}
+                      value={customer.lesseeState}
+                      onChange={handleCustomerChange('lesseeState')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="lesseeZip" className="block text-sm font-medium text-gray-700 mb-1">
+                      ZIP
+                    </label>
+                    <input
+                      id="lesseeZip"
+                      type="text"
+                      maxLength={10}
+                      value={customer.lesseeZip}
+                      onChange={handleCustomerChange('lesseeZip')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="lesseePhone" className="block text-sm font-medium text-gray-700 mb-1">
+                    Phone
+                  </label>
+                  <input
+                    id="lesseePhone"
+                    type="tel"
+                    value={customer.lesseePhone}
+                    onChange={handleCustomerChange('lesseePhone')}
+                    placeholder="(555) 123-4567"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Co-Lessee Information */}
+            <div className="bg-white rounded-lg shadow-md p-5">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                Co-Lessee (Optional)
+              </h2>
+
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="coLesseeName" className="block text-sm font-medium text-gray-700 mb-1">
+                    Full Name
+                  </label>
+                  <input
+                    id="coLesseeName"
+                    type="text"
+                    value={customer.coLesseeName}
+                    onChange={handleCustomerChange('coLesseeName')}
+                    placeholder="Jane Doe"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="coLesseeAddress" className="block text-sm font-medium text-gray-700 mb-1">
+                    Street Address
+                  </label>
+                  <input
+                    id="coLesseeAddress"
+                    type="text"
+                    value={customer.coLesseeAddress}
+                    onChange={handleCustomerChange('coLesseeAddress')}
+                    placeholder="123 Main St"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label htmlFor="coLesseeCity" className="block text-sm font-medium text-gray-700 mb-1">
+                      City
+                    </label>
+                    <input
+                      id="coLesseeCity"
+                      type="text"
+                      value={customer.coLesseeCity}
+                      onChange={handleCustomerChange('coLesseeCity')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="coLesseeState" className="block text-sm font-medium text-gray-700 mb-1">
+                      State
+                    </label>
+                    <input
+                      id="coLesseeState"
+                      type="text"
+                      maxLength={2}
+                      value={customer.coLesseeState}
+                      onChange={handleCustomerChange('coLesseeState')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="coLesseeZip" className="block text-sm font-medium text-gray-700 mb-1">
+                      ZIP
+                    </label>
+                    <input
+                      id="coLesseeZip"
+                      type="text"
+                      maxLength={10}
+                      value={customer.coLesseeZip}
+                      onChange={handleCustomerChange('coLesseeZip')}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="coLesseePhone" className="block text-sm font-medium text-gray-700 mb-1">
+                    Phone
+                  </label>
+                  <input
+                    id="coLesseePhone"
+                    type="tel"
+                    value={customer.coLesseePhone}
+                    onChange={handleCustomerChange('coLesseePhone')}
+                    placeholder="(555) 123-4567"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                  />
+                </div>
               </div>
             </div>
 
@@ -373,7 +781,7 @@ export function DealCalculator() {
             </button>
           </div>
 
-          {/* Right Side - Calculations */}
+          {/* Right Column - Calculations */}
           <div className="space-y-6">
             {!calculation ? (
               <div className="bg-white rounded-lg shadow-md p-8 text-center text-gray-500">
@@ -513,7 +921,7 @@ export function DealCalculator() {
 
       {/* Footer */}
       <footer className="bg-gray-100 border-t mt-8 py-4">
-        <div className="max-w-6xl mx-auto px-4 text-center text-xs text-gray-500">
+        <div className="max-w-7xl mx-auto px-4 text-center text-xs text-gray-500">
           Car World Dealer Partner Portal &copy; {new Date().getFullYear()}
         </div>
       </footer>

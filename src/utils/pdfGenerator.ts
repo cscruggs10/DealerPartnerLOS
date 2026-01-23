@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import type { DealCalculation } from './calculations';
+import type { ContractData } from '../components/DealCalculator';
 
 // ============================================================================
 // Helper Functions
@@ -18,11 +18,22 @@ function checkboxChar(checked: boolean): string {
   return checked ? '[X]' : '[ ]';
 }
 
+// Format full address
+function formatAddress(address: string, city: string, state: string, zip: string): string {
+  const parts = [address, city, state, zip].filter(Boolean);
+  if (parts.length === 0) return '';
+  if (address && city && state && zip) {
+    return `${address}, ${city}, ${state} ${zip}`;
+  }
+  return parts.join(', ');
+}
+
 // ============================================================================
 // PDF Generation
 // ============================================================================
 
-export function generateLeasePDF(calculation: DealCalculation): void {
+export function generateLeasePDF(contractData: ContractData): void {
+  const { calculation, vehicle, customer } = contractData;
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'pt',
@@ -52,24 +63,49 @@ export function generateLeasePDF(calculation: DealCalculation): void {
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text('Name, Address (Lessor):', margin, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Car World Leasing', margin + 130, y);
+  doc.text('_'.repeat(75), margin + 130, y);
   y += 15;
   doc.text('_'.repeat(95), margin, y);
   y += 20;
+
+  // Lessee info
+  const lesseeAddress = formatAddress(customer.lesseeAddress, customer.lesseeCity, customer.lesseeState, customer.lesseeZip);
+  const lesseeInfo = customer.lesseeName ? `${customer.lesseeName}${customer.lesseePhone ? ' - ' + customer.lesseePhone : ''}` : '';
 
   doc.setFont('helvetica', 'bold');
   doc.text('Name, Address, Phone (Lessee):', margin, y);
-  doc.text('_'.repeat(75), margin + 165, y);
+  doc.setFont('helvetica', 'normal');
+  if (lesseeInfo) {
+    doc.text(lesseeInfo, margin + 165, y);
+  } else {
+    doc.text('_'.repeat(75), margin + 165, y);
+  }
   y += 15;
-  doc.text('_'.repeat(95), margin, y);
+  if (lesseeAddress) {
+    doc.text(lesseeAddress, margin, y);
+  } else {
+    doc.text('_'.repeat(95), margin, y);
+  }
   y += 20;
+
+  // Co-Lessee info
+  const coLesseeAddress = formatAddress(customer.coLesseeAddress, customer.coLesseeCity, customer.coLesseeState, customer.coLesseeZip);
+  const coLesseeInfo = customer.coLesseeName ? `${customer.coLesseeName}${customer.coLesseePhone ? ' - ' + customer.coLesseePhone : ''}` : '';
 
   doc.setFont('helvetica', 'bold');
   doc.text('Name, Address, Phone (Co-Lessee):', margin, y);
-  doc.text('_'.repeat(70), margin + 180, y);
+  doc.setFont('helvetica', 'normal');
+  if (coLesseeInfo) {
+    doc.text(coLesseeInfo, margin + 180, y);
+  } else {
+    doc.text('_'.repeat(70), margin + 180, y);
+  }
   y += 15;
-  doc.text('_'.repeat(95), margin, y);
+  if (coLesseeAddress) {
+    doc.text(coLesseeAddress, margin, y);
+  } else {
+    doc.text('_'.repeat(95), margin, y);
+  }
   y += 25;
 
   // ========== PAYMENT SCHEDULE ROW ==========
@@ -115,13 +151,26 @@ export function generateLeasePDF(calculation: DealCalculation): void {
   autoTable(doc, {
     startY: y,
     head: [['Vehicle Description', 'Year', 'Make', 'Model', 'Style', 'Odometer', 'VIN']],
-    body: [['', '', '', '', '', '', '']],
+    body: [[
+      '', // Vehicle Description (blank)
+      vehicle.year || '',
+      vehicle.make || '',
+      vehicle.model || '',
+      vehicle.bodyStyle || '',
+      vehicle.odometer || '',
+      vehicle.vin || ''
+    ]],
     theme: 'grid',
     headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9 },
-    bodyStyles: { minCellHeight: 20, fontSize: 9 },
+    bodyStyles: { minCellHeight: 35, fontSize: 10, valign: 'middle' },
     columnStyles: {
-      0: { cellWidth: 80 },
-      6: { cellWidth: 120 },
+      0: { cellWidth: 70 },
+      1: { cellWidth: 45 },
+      2: { cellWidth: 60 },
+      3: { cellWidth: 70 },
+      4: { cellWidth: 70 },
+      5: { cellWidth: 60 },
+      6: { cellWidth: 130 },
     },
     margin: { left: margin, right: margin },
   });
@@ -141,10 +190,15 @@ export function generateLeasePDF(calculation: DealCalculation): void {
     body: [['', '', '', '', '', '', '']],
     theme: 'grid',
     headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9 },
-    bodyStyles: { minCellHeight: 20, fontSize: 9 },
+    bodyStyles: { minCellHeight: 35, fontSize: 10, valign: 'middle' },
     columnStyles: {
-      0: { cellWidth: 80 },
-      6: { cellWidth: 120 },
+      0: { cellWidth: 70 },
+      1: { cellWidth: 45 },
+      2: { cellWidth: 60 },
+      3: { cellWidth: 70 },
+      4: { cellWidth: 70 },
+      5: { cellWidth: 60 },
+      6: { cellWidth: 130 },
     },
     margin: { left: margin, right: margin },
   });
@@ -515,6 +569,6 @@ export function generateLeasePDF(calculation: DealCalculation): void {
   doc.save(`CarWorld_Lease_${timestamp}.pdf`);
 }
 
-export async function downloadLeasePDF(calculation: DealCalculation): Promise<void> {
-  generateLeasePDF(calculation);
+export async function downloadLeasePDF(contractData: ContractData): Promise<void> {
+  generateLeasePDF(contractData);
 }
