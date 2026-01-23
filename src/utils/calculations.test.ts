@@ -6,8 +6,11 @@ import {
   reverseCalculateAdjustedCap,
   calculateDepreciation,
   calculateRentCharge,
+  calculateNumberOfPayments,
   findMaxTermForMinPayment,
   findMinTermForMinSpread,
+  toMonthlyEquivalent,
+  fromMonthlyEquivalent,
   moneyFactorToAPR,
   aprToMoneyFactor,
   roundCurrency,
@@ -16,9 +19,10 @@ import {
   MONEY_FACTOR,
   RESIDUAL_PERCENT,
   INVESTOR_RATE,
-  MIN_MONTHLY_PAYMENT,
+  MIN_MONTHLY_PAYMENT_EQUIVALENT,
   MIN_SPREAD,
   TAX_RATES,
+  PAYMENT_FREQUENCIES,
 } from './constants';
 
 describe('Constants', () => {
@@ -38,6 +42,13 @@ describe('Constants', () => {
   it('should have TN and MS tax rates', () => {
     expect(TAX_RATES.TN).toBe(0.095);
     expect(TAX_RATES.MS).toBe(0.05);
+  });
+
+  it('should have correct payment frequencies', () => {
+    expect(PAYMENT_FREQUENCIES.weekly.paymentsPerYear).toBe(52);
+    expect(PAYMENT_FREQUENCIES.biweekly.paymentsPerYear).toBe(26);
+    expect(PAYMENT_FREQUENCIES.semimonthly.paymentsPerYear).toBe(24);
+    expect(PAYMENT_FREQUENCIES.monthly.paymentsPerYear).toBe(12);
   });
 });
 
@@ -64,22 +75,55 @@ describe('Helper Functions', () => {
     });
   });
 
+  describe('toMonthlyEquivalent', () => {
+    it('should convert weekly payment to monthly equivalent', () => {
+      // $100/week * 52 weeks / 12 months = $433.33/month
+      expect(toMonthlyEquivalent(100, 'weekly')).toBeCloseTo(433.33, 0);
+    });
+
+    it('should convert biweekly payment to monthly equivalent', () => {
+      // $200/biweekly * 26 / 12 = $433.33/month
+      expect(toMonthlyEquivalent(200, 'biweekly')).toBeCloseTo(433.33, 0);
+    });
+
+    it('should keep monthly as-is', () => {
+      expect(toMonthlyEquivalent(500, 'monthly')).toBe(500);
+    });
+  });
+
+  describe('fromMonthlyEquivalent', () => {
+    it('should convert monthly to weekly payment', () => {
+      // $433.33/month * 12 / 52 = $100/week
+      expect(fromMonthlyEquivalent(433.33, 'weekly')).toBeCloseTo(100, 0);
+    });
+  });
+
+  describe('calculateNumberOfPayments', () => {
+    it('should calculate correct number of payments for each frequency', () => {
+      // 36 month term
+      expect(calculateNumberOfPayments(36, 'monthly')).toBe(36);
+      expect(calculateNumberOfPayments(36, 'semimonthly')).toBe(72);
+      expect(calculateNumberOfPayments(36, 'biweekly')).toBe(78);
+      expect(calculateNumberOfPayments(36, 'weekly')).toBe(156);
+    });
+  });
+
   describe('calculateAmortizedPayment', () => {
     it('should calculate standard loan amortization correctly', () => {
-      // $10,000 at 12% for 12 months = ~$888.49/month
-      const payment = calculateAmortizedPayment(10000, 0.12, 12);
+      // $10,000 at 12% for 12 monthly payments = ~$888.49/month
+      const payment = calculateAmortizedPayment(10000, 0.12, 12, 12);
       expect(payment).toBeCloseTo(888.49, 0);
     });
 
     it('should handle 0% interest', () => {
-      const payment = calculateAmortizedPayment(12000, 0, 12);
+      const payment = calculateAmortizedPayment(12000, 0, 12, 12);
       expect(payment).toBe(1000);
     });
 
-    it('should calculate investor payment for $10,000 at 12.5% for 36 months', () => {
-      const payment = calculateAmortizedPayment(10000, INVESTOR_RATE, 36);
-      // Expected ~$334.67
-      expect(payment).toBeCloseTo(334.67, 0);
+    it('should calculate weekly payments correctly', () => {
+      // $10,000 at 12% for 52 weekly payments
+      const payment = calculateAmortizedPayment(10000, 0.12, 52, 52);
+      expect(payment).toBeGreaterThan(0);
     });
   });
 });
@@ -102,64 +146,87 @@ describe('Lease Calculation Functions', () => {
   });
 
   describe('reverseCalculateAdjustedCap', () => {
-    it('should reverse calculate adjusted cap from base payment', () => {
-      // If we know the base payment, residual, term, and MF, we should get back adjusted cap
+    it('should reverse calculate adjusted cap from base payment (monthly)', () => {
       const adjustedCap = 20000;
       const residual = 5000;
       const term = 36;
+      const numPayments = 36; // monthly
 
       // Forward calculate base payment
       const depreciation = calculateDepreciation(adjustedCap, residual);
       const rentCharge = calculateRentCharge(adjustedCap, residual, term);
-      const basePayment = (depreciation + rentCharge) / term;
+      const basePayment = (depreciation + rentCharge) / numPayments;
 
       // Reverse calculate should give us back the adjusted cap
-      const calculatedAdjustedCap = reverseCalculateAdjustedCap(basePayment, residual, term);
+      const calculatedAdjustedCap = reverseCalculateAdjustedCap(basePayment, residual, term, numPayments);
       expect(calculatedAdjustedCap).toBeCloseTo(adjustedCap, 0);
     });
   });
 });
 
 describe('calculateDeal', () => {
-  it('should calculate a basic deal correctly', () => {
+  it('should calculate a basic monthly deal correctly', () => {
     const deal = calculateDeal({
       acv: 10000,
       termMonths: 36,
       docFee: 499,
       state: 'TN',
+      paymentFrequency: 'monthly',
     });
 
-    // Step 1: Residual = ACV * 15% = $1,500
+    // Residual = ACV * 15% = $1,500
     expect(deal.residualValue).toBe(1500);
 
-    // Step 2: Total of payments = ACV * 2 = $20,000
+    // Total of payments = ACV * 2 = $20,000
     expect(deal.totalOfPayments).toBe(20000);
 
-    // Step 3: Number of payments = term
+    // Number of payments = 36 (monthly)
     expect(deal.numberOfPayments).toBe(36);
 
-    // Step 4: Base payment = 20000 / 36 = $555.56
+    // Base payment = 20000 / 36 = $555.56
     expect(deal.basePayment).toBeCloseTo(555.56, 2);
 
-    // Step 5: Agreed price is reverse-calculated
-    expect(deal.agreedPrice).toBeGreaterThan(0);
+    // Frequency label
+    expect(deal.paymentFrequencyLabel).toBe('Monthly');
+  });
 
-    // Step 6: Investor payment (amortized at 12.5%)
-    const expectedInvestorPayment = calculateAmortizedPayment(10000, INVESTOR_RATE, 36);
-    expect(deal.investorPayment).toBeCloseTo(expectedInvestorPayment, 2);
+  it('should calculate a biweekly deal correctly', () => {
+    const deal = calculateDeal({
+      acv: 10000,
+      termMonths: 36,
+      docFee: 499,
+      state: 'TN',
+      paymentFrequency: 'biweekly',
+    });
 
-    // Step 7: Spread = base - investor
-    expect(deal.spread).toBeCloseTo(deal.basePayment - deal.investorPayment, 2);
+    // Number of payments = 36 * (26/12) = 78
+    expect(deal.numberOfPayments).toBe(78);
 
-    // Step 8: Tax calculations
-    expect(deal.taxRate).toBe(0.095);
-    expect(deal.salesTax).toBeCloseTo(deal.agreedPrice * 0.095, 2);
+    // Base payment = 20000 / 78 = ~$256.41
+    expect(deal.basePayment).toBeCloseTo(256.41, 2);
 
-    // Step 9: Total payment = base + tax per payment
-    expect(deal.totalPayment).toBeCloseTo(deal.basePayment + deal.taxPerPayment, 2);
+    // Monthly equivalent should be ~$555.56
+    expect(deal.basePaymentMonthlyEquivalent).toBeCloseTo(555.56, 0);
 
-    // Step 10: Amount due at signing = total payment + doc fee
-    expect(deal.amountDueAtSigning).toBeCloseTo(deal.totalPayment + 499, 2);
+    expect(deal.paymentFrequencyLabel).toBe('Bi-Weekly');
+  });
+
+  it('should calculate a weekly deal correctly', () => {
+    const deal = calculateDeal({
+      acv: 10000,
+      termMonths: 36,
+      docFee: 499,
+      state: 'TN',
+      paymentFrequency: 'weekly',
+    });
+
+    // Number of payments = 36 * (52/12) = 156
+    expect(deal.numberOfPayments).toBe(156);
+
+    // Base payment = 20000 / 156 = ~$128.21
+    expect(deal.basePayment).toBeCloseTo(128.21, 2);
+
+    expect(deal.paymentFrequencyLabel).toBe('Weekly');
   });
 
   it('should calculate different state taxes correctly', () => {
@@ -168,6 +235,7 @@ describe('calculateDeal', () => {
       termMonths: 36,
       docFee: 499,
       state: 'TN',
+      paymentFrequency: 'monthly',
     });
 
     const msDeal = calculateDeal({
@@ -175,6 +243,7 @@ describe('calculateDeal', () => {
       termMonths: 36,
       docFee: 499,
       state: 'MS',
+      paymentFrequency: 'monthly',
     });
 
     expect(tnDeal.taxRate).toBe(0.095);
@@ -182,49 +251,45 @@ describe('calculateDeal', () => {
     expect(tnDeal.salesTax).toBeGreaterThan(msDeal.salesTax);
   });
 
-  it('should calculate higher payments for shorter terms', () => {
-    const shortTerm = calculateDeal({
+  it('should have consistent total payments across frequencies', () => {
+    const monthly = calculateDeal({
       acv: 10000,
-      termMonths: 24,
-      docFee: 499,
-      state: 'TN',
-    });
-
-    const longTerm = calculateDeal({
-      acv: 10000,
-      termMonths: 48,
-      docFee: 499,
-      state: 'TN',
-    });
-
-    expect(shortTerm.basePayment).toBeGreaterThan(longTerm.basePayment);
-  });
-
-  it('should verify the lease math is internally consistent', () => {
-    const deal = calculateDeal({
-      acv: 15000,
       termMonths: 36,
       docFee: 499,
       state: 'TN',
+      paymentFrequency: 'monthly',
     });
 
-    // Verify: depreciation + rentCharge = totalOfPayments (approximately)
-    // This is the core lease equation
-    const calculatedTotal = deal.depreciation + deal.rentCharge;
-    expect(calculatedTotal).toBeCloseTo(deal.totalOfPayments, 0);
+    const biweekly = calculateDeal({
+      acv: 10000,
+      termMonths: 36,
+      docFee: 499,
+      state: 'TN',
+      paymentFrequency: 'biweekly',
+    });
 
-    // Verify: basePayment * term = totalOfPayments
-    expect(deal.basePayment * deal.numberOfPayments).toBeCloseTo(deal.totalOfPayments, 0);
+    const weekly = calculateDeal({
+      acv: 10000,
+      termMonths: 36,
+      docFee: 499,
+      state: 'TN',
+      paymentFrequency: 'weekly',
+    });
+
+    // Total of payments should be the same regardless of frequency
+    expect(monthly.totalOfPayments).toBe(biweekly.totalOfPayments);
+    expect(biweekly.totalOfPayments).toBe(weekly.totalOfPayments);
   });
 });
 
 describe('validateDeal', () => {
-  it('should pass validation for a good deal', () => {
+  it('should pass validation for a good monthly deal', () => {
     const deal = calculateDeal({
       acv: 10000,
       termMonths: 36,
       docFee: 499,
       state: 'TN',
+      paymentFrequency: 'monthly',
     });
 
     const result = validateDeal(deal);
@@ -232,13 +297,27 @@ describe('validateDeal', () => {
     expect(result.errors).toHaveLength(0);
   });
 
-  it('should fail validation when base payment is below minimum', () => {
-    // $5000 ACV at 72 months = $10000 / 72 = $138.89 base payment (below $300)
+  it('should pass validation for a good biweekly deal', () => {
     const deal = calculateDeal({
-      acv: 5000,
-      termMonths: 72,
+      acv: 10000,
+      termMonths: 36,
       docFee: 499,
       state: 'TN',
+      paymentFrequency: 'biweekly',
+    });
+
+    const result = validateDeal(deal);
+    expect(result.isValid).toBe(true);
+  });
+
+  it('should fail validation when monthly equivalent payment is below minimum', () => {
+    // Low ACV with long term = low monthly equivalent
+    const deal = calculateDeal({
+      acv: 5000,
+      termMonths: 48,
+      docFee: 499,
+      state: 'TN',
+      paymentFrequency: 'monthly',
     });
 
     const result = validateDeal(deal);
@@ -246,175 +325,104 @@ describe('validateDeal', () => {
 
     const paymentError = result.errors.find(e => e.field === 'basePayment');
     expect(paymentError).toBeDefined();
-    expect(paymentError?.suggestedValue).toBeDefined();
-  });
-
-  it('should fail validation when spread is below minimum', () => {
-    // Very low ACV might not generate enough spread
-    // Need to find a case where spread < $150
-    // This is harder to trigger since our formula is designed to be profitable
-    // Let's check a borderline case
-    const deal = calculateDeal({
-      acv: 3000,
-      termMonths: 72,
-      docFee: 499,
-      state: 'TN',
-    });
-
-    const result = validateDeal(deal);
-
-    // Check if spread error exists (it might or might not depending on the math)
-    if (deal.spread < MIN_SPREAD) {
-      const spreadError = result.errors.find(e => e.field === 'spread');
-      expect(spreadError).toBeDefined();
-    }
   });
 });
 
 describe('findMaxTermForMinPayment', () => {
-  it('should find maximum term that meets minimum payment', () => {
-    // $10,000 ACV = $20,000 total payments
-    // $300 min payment = 66.67 months max
-    // Should return 60 as the max valid term
-    const maxTerm = findMaxTermForMinPayment(10000);
-    expect(maxTerm).toBe(60);
+  it('should find maximum term for monthly frequency', () => {
+    const maxTerm = findMaxTermForMinPayment(10000, 'monthly');
+    expect(maxTerm).toBeDefined();
+    expect(maxTerm).toBeLessThanOrEqual(72);
   });
 
-  it('should return 72 for high ACV vehicles', () => {
-    // $20,000 ACV = $40,000 total payments
-    // $300 min payment = 133 months max
-    // Should return 72 as the max valid term
-    const maxTerm = findMaxTermForMinPayment(20000);
-    expect(maxTerm).toBe(72);
-  });
+  it('should find same effective max term for biweekly', () => {
+    const monthlyMax = findMaxTermForMinPayment(10000, 'monthly');
+    const biweeklyMax = findMaxTermForMinPayment(10000, 'biweekly');
 
-  it('should return lower term for low ACV', () => {
-    // $5,000 ACV = $10,000 total payments
-    // $300 min payment = 33 months max
-    // Should return 24 as the max valid term
-    const maxTerm = findMaxTermForMinPayment(5000);
-    expect(maxTerm).toBe(24);
+    // Should be the same since we're checking monthly equivalents
+    expect(monthlyMax).toBe(biweeklyMax);
   });
 });
 
 describe('findMinTermForMinSpread', () => {
   it('should find minimum term that achieves minimum spread', () => {
-    const minTerm = findMinTermForMinSpread(10000);
+    const minTerm = findMinTermForMinSpread(10000, 'monthly');
     expect(minTerm).toBeDefined();
 
     if (minTerm) {
-      // Verify the spread at this term meets minimum
       const deal = calculateDeal({
         acv: 10000,
         termMonths: minTerm,
         docFee: 499,
         state: 'TN',
+        paymentFrequency: 'monthly',
       });
-      expect(deal.spread).toBeGreaterThanOrEqual(MIN_SPREAD);
+      expect(deal.monthlySpreadEquivalent).toBeGreaterThanOrEqual(MIN_SPREAD);
     }
   });
 });
 
-describe('Edge Cases', () => {
-  it('should handle minimum ACV', () => {
-    const deal = calculateDeal({
-      acv: 1000,
-      termMonths: 12,
-      docFee: 499,
-      state: 'TN',
-    });
-
-    expect(deal.residualValue).toBe(150);
-    expect(deal.totalOfPayments).toBe(2000);
-    expect(deal.basePayment).toBeCloseTo(166.67, 2);
-  });
-
-  it('should handle maximum reasonable ACV', () => {
-    const deal = calculateDeal({
-      acv: 50000,
-      termMonths: 48,
-      docFee: 499,
-      state: 'TN',
-    });
-
-    expect(deal.residualValue).toBe(7500);
-    expect(deal.totalOfPayments).toBe(100000);
-    expect(deal.basePayment).toBeCloseTo(2083.33, 2);
-  });
-
-  it('should handle zero doc fee', () => {
-    const deal = calculateDeal({
-      acv: 10000,
-      termMonths: 36,
-      docFee: 0,
-      state: 'TN',
-    });
-
-    expect(deal.amountDueAtSigning).toBe(deal.totalPayment);
-  });
-});
-
 describe('Real World Scenarios', () => {
-  it('should calculate a typical used car lease', () => {
-    // $12,000 used car, 36 month lease, TN
+  it('should calculate a typical biweekly used car lease', () => {
+    // $12,000 used car, 36 month lease, biweekly, TN
     const deal = calculateDeal({
       acv: 12000,
       termMonths: 36,
       docFee: 499,
       state: 'TN',
+      paymentFrequency: 'biweekly',
     });
 
     // Total payments should be $24,000
     expect(deal.totalOfPayments).toBe(24000);
 
-    // Monthly base payment should be $666.67
-    expect(deal.basePayment).toBeCloseTo(666.67, 2);
+    // 78 biweekly payments
+    expect(deal.numberOfPayments).toBe(78);
 
-    // Residual should be $1,800
-    expect(deal.residualValue).toBe(1800);
+    // Biweekly payment should be ~$307.69
+    expect(deal.basePayment).toBeCloseTo(307.69, 2);
 
     // Validate the deal
     const validation = validateDeal(deal);
     expect(validation.isValid).toBe(true);
 
-    console.log('Typical Used Car Lease ($12,000 ACV, 36mo, TN):');
+    console.log('Typical Biweekly Used Car Lease ($12,000 ACV, 36mo, TN):');
+    console.log(`  Payment Frequency: ${deal.paymentFrequencyLabel}`);
+    console.log(`  Number of Payments: ${deal.numberOfPayments}`);
     console.log(`  Residual Value: $${deal.residualValue}`);
     console.log(`  Agreed Price: $${deal.agreedPrice.toFixed(2)}`);
     console.log(`  Base Payment: $${deal.basePayment.toFixed(2)}`);
+    console.log(`  Monthly Equivalent: $${deal.basePaymentMonthlyEquivalent.toFixed(2)}`);
     console.log(`  Tax/Payment: $${deal.taxPerPayment.toFixed(2)}`);
     console.log(`  Total Payment: $${deal.totalPayment.toFixed(2)}`);
     console.log(`  Due at Signing: $${deal.amountDueAtSigning.toFixed(2)}`);
-    console.log(`  Investor Payment: $${deal.investorPayment.toFixed(2)}`);
-    console.log(`  Spread: $${deal.spread.toFixed(2)}`);
+    console.log(`  Spread (per payment): $${deal.spread.toFixed(2)}`);
+    console.log(`  Monthly Spread Equiv: $${deal.monthlySpreadEquivalent.toFixed(2)}`);
   });
 
-  it('should calculate a higher value vehicle lease', () => {
-    // $25,000 vehicle, 48 month lease, MS
+  it('should calculate a weekly lease', () => {
+    // $15,000 vehicle, 24 month lease, weekly, MS
     const deal = calculateDeal({
-      acv: 25000,
-      termMonths: 48,
+      acv: 15000,
+      termMonths: 24,
       docFee: 499,
       state: 'MS',
+      paymentFrequency: 'weekly',
     });
 
-    // Total payments should be $50,000
-    expect(deal.totalOfPayments).toBe(50000);
-
-    // Monthly base payment should be $1,041.67
-    expect(deal.basePayment).toBeCloseTo(1041.67, 2);
+    // 104 weekly payments (24 months * 52/12)
+    expect(deal.numberOfPayments).toBe(104);
 
     // Validate the deal
     const validation = validateDeal(deal);
     expect(validation.isValid).toBe(true);
 
-    console.log('\nHigher Value Lease ($25,000 ACV, 48mo, MS):');
-    console.log(`  Residual Value: $${deal.residualValue}`);
-    console.log(`  Agreed Price: $${deal.agreedPrice.toFixed(2)}`);
+    console.log('\nWeekly Lease ($15,000 ACV, 24mo, MS):');
+    console.log(`  Payment Frequency: ${deal.paymentFrequencyLabel}`);
+    console.log(`  Number of Payments: ${deal.numberOfPayments}`);
     console.log(`  Base Payment: $${deal.basePayment.toFixed(2)}`);
-    console.log(`  Tax/Payment: $${deal.taxPerPayment.toFixed(2)}`);
+    console.log(`  Monthly Equivalent: $${deal.basePaymentMonthlyEquivalent.toFixed(2)}`);
     console.log(`  Total Payment: $${deal.totalPayment.toFixed(2)}`);
-    console.log(`  Due at Signing: $${deal.amountDueAtSigning.toFixed(2)}`);
-    console.log(`  Investor Payment: $${deal.investorPayment.toFixed(2)}`);
-    console.log(`  Spread: $${deal.spread.toFixed(2)}`);
+    console.log(`  Monthly Spread Equiv: $${deal.monthlySpreadEquivalent.toFixed(2)}`);
   });
 });

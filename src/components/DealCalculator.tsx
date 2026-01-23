@@ -6,18 +6,32 @@ import {
   type DealCalculation,
   type ValidationResult,
 } from '../utils/calculations';
-import { TAX_RATES, type SupportedState } from '../utils/constants';
+import {
+  TAX_RATES,
+  PAYMENT_FREQUENCIES,
+  MIN_SPREAD,
+  type SupportedState,
+  type PaymentFrequency,
+} from '../utils/constants';
 
 interface FormState {
   state: SupportedState;
   acv: string;
   termMonths: string;
   docFee: string;
+  paymentFrequency: PaymentFrequency;
 }
 
 const STATES: { value: SupportedState; label: string }[] = [
   { value: 'TN', label: 'Tennessee' },
   { value: 'MS', label: 'Mississippi' },
+];
+
+const FREQUENCIES: { value: PaymentFrequency; label: string }[] = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'biweekly', label: 'Bi-Weekly' },
+  { value: 'semimonthly', label: 'Semi-Monthly' },
+  { value: 'monthly', label: 'Monthly' },
 ];
 
 export function DealCalculator() {
@@ -26,6 +40,7 @@ export function DealCalculator() {
     acv: '',
     termMonths: '',
     docFee: '499',
+    paymentFrequency: 'biweekly',
   });
 
   // Parse form values
@@ -41,10 +56,11 @@ export function DealCalculator() {
         termMonths,
         docFee,
         state: form.state,
+        paymentFrequency: form.paymentFrequency,
       });
     }
     return null;
-  }, [acv, termMonths, docFee, form.state]);
+  }, [acv, termMonths, docFee, form.state, form.paymentFrequency]);
 
   // Validate deal
   const validation = useMemo<ValidationResult | null>(() => {
@@ -145,6 +161,28 @@ export function DealCalculator() {
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                 />
                 <p className="text-xs text-gray-500 mt-1">1-48 months</p>
+              </div>
+
+              {/* Payment Frequency */}
+              <div>
+                <label htmlFor="frequency" className="block text-sm font-medium text-gray-700 mb-1">
+                  Customer Pay Frequency
+                </label>
+                <select
+                  id="frequency"
+                  value={form.paymentFrequency}
+                  onChange={handleInputChange('paymentFrequency')}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                >
+                  {FREQUENCIES.map((freq) => (
+                    <option key={freq.value} value={freq.value}>
+                      {freq.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  {PAYMENT_FREQUENCIES[form.paymentFrequency].paymentsPerYear} payments per year
+                </p>
               </div>
 
               {/* Doc Fee */}
@@ -258,6 +296,11 @@ export function DealCalculator() {
 
                 {/* Primary Payment Info */}
                 <div className="bg-blue-900 text-white rounded-lg p-6">
+                  <div className="text-center mb-2">
+                    <span className="inline-block bg-blue-700 text-blue-100 text-xs font-medium px-3 py-1 rounded-full">
+                      {calculation.paymentFrequencyLabel} Payments
+                    </span>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-blue-200 text-sm">Base Payment</p>
@@ -311,6 +354,11 @@ export function DealCalculator() {
                   <h3 className="font-medium text-gray-700 border-b pb-2">Payment Details</h3>
 
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div className="text-gray-600">Payment Frequency</div>
+                    <div className="text-right font-medium text-gray-900">
+                      {calculation.paymentFrequencyLabel}
+                    </div>
+
                     <div className="text-gray-600">Number of Payments</div>
                     <div className="text-right font-medium text-gray-900">
                       {calculation.numberOfPayments}
@@ -342,15 +390,31 @@ export function DealCalculator() {
                       {formatCurrency(calculation.investorPayment)}
                     </div>
 
-                    <div className="text-gray-600">Spread</div>
-                    <div
-                      className={`text-right font-bold ${
-                        calculation.spread >= 150 ? 'text-green-600' : 'text-red-600'
-                      }`}
-                    >
+                    <div className="text-gray-600">Spread (per payment)</div>
+                    <div className="text-right font-medium text-gray-900">
                       {formatCurrency(calculation.spread)}
                     </div>
+
+                    <div className="text-gray-600">Monthly Equiv. Spread</div>
+                    <div
+                      className={`text-right font-bold ${
+                        calculation.monthlySpreadEquivalent >= MIN_SPREAD ? 'text-green-600' : 'text-red-600'
+                      }`}
+                    >
+                      {formatCurrency(calculation.monthlySpreadEquivalent)}
+                    </div>
                   </div>
+                </div>
+
+                {/* Monthly Equivalent Info */}
+                <div className="bg-gray-50 rounded-lg p-4 text-sm">
+                  <p className="text-gray-600">
+                    <span className="font-medium">Monthly Equivalent Payment:</span>{' '}
+                    {formatCurrency(calculation.basePaymentMonthlyEquivalent)}
+                  </p>
+                  <p className="text-gray-500 text-xs mt-1">
+                    Validation is based on monthly equivalents to ensure deal profitability
+                  </p>
                 </div>
               </div>
             )}

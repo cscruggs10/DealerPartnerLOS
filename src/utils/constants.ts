@@ -13,10 +13,21 @@ export const PRIME_RATE = 0.075;
 // Investor rate: Prime + 5% = 12.50%
 export const INVESTOR_RATE = 0.125;
 
-// Minimum monthly payment allowed
-export const MIN_MONTHLY_PAYMENT = 300;
+// Payment frequency options
+export const PAYMENT_FREQUENCIES = {
+  weekly: { label: 'Weekly', paymentsPerYear: 52 },
+  biweekly: { label: 'Bi-Weekly', paymentsPerYear: 26 },
+  semimonthly: { label: 'Semi-Monthly', paymentsPerYear: 24 },
+  monthly: { label: 'Monthly', paymentsPerYear: 12 },
+} as const;
 
-// Minimum spread (profit margin) required
+export type PaymentFrequency = keyof typeof PAYMENT_FREQUENCIES;
+
+// Minimum payment allowed (adjusted by frequency)
+// $300/month equivalent
+export const MIN_MONTHLY_PAYMENT_EQUIVALENT = 300;
+
+// Minimum spread (profit margin) required per month
 export const MIN_SPREAD = 150;
 
 // State tax rates
