@@ -11,7 +11,6 @@ import {
   TAX_RATES,
   PAYMENT_FREQUENCIES,
   MIN_SPREAD,
-  MAX_MARKUP,
   MAX_TERM_MONTHS,
   type SupportedState,
   type PaymentFrequency,
@@ -912,28 +911,33 @@ export function DealCalculator() {
                   </h3>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between py-1">
-                      <span className="text-gray-600">Agreed Price</span>
-                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.agreedPrice)}</span>
+                      <span className="text-gray-600">Capitalized Cost</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.capitalizedCost)}</span>
+                    </div>
+                    {calculation.capCostReduction > 0 && (
+                      <div className="flex justify-between py-1">
+                        <span className="text-gray-600">Cap Cost Reduction</span>
+                        <span className="font-semibold text-gray-900">-{formatCurrency(calculation.capCostReduction)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-600">Net Capitalized Cost</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.netCapitalizedCost)}</span>
                     </div>
                     <div className="flex justify-between py-1">
                       <span className="text-gray-600">Residual Value (15%)</span>
                       <span className="font-semibold text-gray-900">{formatCurrency(calculation.residualValue)}</span>
                     </div>
-                    <div className="flex justify-between py-1 items-center">
-                      <span className="text-gray-600 flex items-center gap-1">
-                        Markup
-                        {calculation.markup > MAX_MARKUP * 0.9 && calculation.markup <= MAX_MARKUP && (
-                          <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </span>
-                      <span className={`font-semibold ${calculation.markup > MAX_MARKUP ? 'text-red-600' : 'text-gray-900'}`}>
-                        {formatCurrency(calculation.markup)}
-                      </span>
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-600">Depreciation</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.depreciation)}</span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-600">Rent Charge</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.rentCharge)}</span>
                     </div>
                     <div className="flex justify-between py-1 border-t pt-2">
-                      <span className="text-gray-600">Total of Payments</span>
+                      <span className="text-gray-600">Total of Base Payments</span>
                       <span className="font-semibold text-gray-900">{formatCurrency(calculation.totalOfPayments)}</span>
                     </div>
                     <div className="flex justify-between py-1 bg-gray-50 -mx-5 px-5 mt-2">
@@ -950,21 +954,21 @@ export function DealCalculator() {
                       Customer Cash Breakdown
                     </h3>
                     <div className="space-y-2 text-sm">
-                      <div className="flex justify-between py-1 border-b pb-2">
-                        <span className="text-gray-700 font-medium">Total Customer Cash</span>
-                        <span className="font-bold text-gray-900">{formatCurrency(calculation.downPayment)}</span>
-                      </div>
                       <div className="flex justify-between py-1">
-                        <span className="text-gray-600">Doc Fee</span>
-                        <span className="font-semibold text-gray-900">-{formatCurrency(calculation.docFee)}</span>
+                        <span className="text-gray-600">Cash Down</span>
+                        <span className="font-semibold text-gray-900">{formatCurrency(calculation.downPayment)}</span>
                       </div>
                       <div className="flex justify-between py-1 border-t pt-2">
-                        <span className="text-gray-700 font-medium">Cap Cost Reduction</span>
+                        <span className="text-gray-700 font-medium">Total Cap Cost Reduction</span>
                         <span className="font-bold text-gray-900">{formatCurrency(calculation.capCostReduction)}</span>
+                      </div>
+                      <div className="flex justify-between py-1">
+                        <span className="text-gray-600">Tax on Cap Cost Reduction</span>
+                        <span className="font-semibold text-gray-900">{formatCurrency(calculation.taxOnCapCostReduction)}</span>
                       </div>
                       {calculation.capCostReduction > 0 && (
                         <>
-                          <div className="flex justify-between py-1 pl-4 text-xs">
+                          <div className="flex justify-between py-1 pl-4 text-xs border-t pt-2">
                             <span className="text-gray-500">Dealer Share (75%)</span>
                             <span className="font-semibold text-green-600">{formatCurrency(calculation.downPaymentDealerShare)}</span>
                           </div>
