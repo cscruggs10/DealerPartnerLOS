@@ -33,7 +33,7 @@ function formatAddress(address: string, city: string, state: string, zip: string
 // ============================================================================
 
 export function generateLeasePDF(contractData: ContractData): void {
-  const { calculation, vehicle, customer } = contractData;
+  const { calculation, vehicle, customer, firstPaymentDate } = contractData;
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'pt',
@@ -230,7 +230,7 @@ export function generateLeasePDF(contractData: ContractData): void {
         { content: 'Amount Due At Signing\n(Itemization below*)', styles: { fontStyle: 'bold' } },
         { content: formatCurrency(calculation.amountDueAtSigning), styles: { fontStyle: 'bold', fontSize: 14, halign: 'center' } },
         {
-          content: `Payments\na. Periodic payments. Your first periodic payment of ${formatCurrency(calculation.totalPayment)} is due on _____________ followed by ${calculation.numberOfPayments - 1} payments of ${formatCurrency(calculation.totalPayment)}. The total of your periodic payments is: ${formatCurrency(totalOfPaymentsWithTax)}.`,
+          content: `Payments\na. Periodic payments. Your first periodic payment of ${formatCurrency(calculation.totalPayment)} is due on ${firstPaymentDate} followed by ${calculation.numberOfPayments - 1} payments of ${formatCurrency(calculation.totalPayment)}. The total of your periodic payments is: ${formatCurrency(totalOfPaymentsWithTax)}.`,
           styles: { fontSize: 9 }
         },
       ],

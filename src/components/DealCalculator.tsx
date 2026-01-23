@@ -18,6 +18,14 @@ import {
 } from '../utils/constants';
 import { downloadLeasePDF } from '../utils/pdfGenerator';
 import { decodeVIN, type VehicleInfo } from '../utils/vinDecoder';
+import {
+  calculateFirstPaymentDate,
+  DAYS_OF_WEEK,
+  SEMI_MONTHLY_SCHEDULES,
+  DAYS_OF_MONTH,
+  type PayDayConfig,
+  type FirstPaymentResult,
+} from '../utils/paymentDateCalculator';
 
 interface FormState {
   state: SupportedState;
@@ -56,6 +64,7 @@ export interface ContractData {
   calculation: DealCalculation;
   vehicle: VehicleState;
   customer: CustomerState;
+  firstPaymentDate: string;
 }
 
 const STATES: { value: SupportedState; label: string }[] = [
@@ -110,6 +119,13 @@ export function DealCalculator() {
   const [vinError, setVinError] = useState<string | null>(null);
   const [vinSuccess, setVinSuccess] = useState(false);
 
+  // Pay day configuration for first payment date calculation
+  const [payDayConfig, setPayDayConfig] = useState<PayDayConfig>({
+    dayOfWeek: 5, // Friday default for weekly/biweekly
+    semiMonthlyDays: [1, 15], // 1st and 15th default
+    monthlyDay: 1, // 1st of month default
+  });
+
   // Parse form values
   const acv = parseFloat(form.acv.replace(/[^0-9.]/g, '')) || 0;
   const termMonths = parseInt(form.termMonths, 10) || 0;
@@ -154,6 +170,11 @@ export function DealCalculator() {
     }
     return null;
   }, [calculation]);
+
+  // Calculate first payment date based on customer pay schedule
+  const firstPaymentDate = useMemo<FirstPaymentResult | null>(() => {
+    return calculateFirstPaymentDate(form.paymentFrequency, payDayConfig);
+  }, [form.paymentFrequency, payDayConfig]);
 
   const handleInputChange = (field: keyof FormState) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -221,7 +242,7 @@ export function DealCalculator() {
 
   // Generate contract document
   const handleGenerateContract = async () => {
-    if (!calculation || !validation?.isValid) return;
+    if (!calculation || !validation?.isValid || !firstPaymentDate) return;
 
     setIsGenerating(true);
     try {
@@ -229,6 +250,7 @@ export function DealCalculator() {
         calculation,
         vehicle,
         customer,
+        firstPaymentDate: firstPaymentDate.formattedDate,
       };
       await downloadLeasePDF(contractData);
     } catch (error) {
@@ -308,6 +330,63 @@ export function DealCalculator() {
                   <p className="text-xs text-gray-500 mt-1">
                     {PAYMENT_FREQUENCIES[form.paymentFrequency].paymentsPerYear}/year
                   </p>
+                </div>
+
+                {/* Customer Pay Day */}
+                <div>
+                  <label htmlFor="payDay" className="block text-sm font-medium text-gray-700 mb-1">
+                    Customer Pay Day
+                  </label>
+                  {(form.paymentFrequency === 'weekly' || form.paymentFrequency === 'biweekly') && (
+                    <select
+                      id="payDay"
+                      value={payDayConfig.dayOfWeek}
+                      onChange={(e) => setPayDayConfig(prev => ({ ...prev, dayOfWeek: parseInt(e.target.value) }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                    >
+                      {DAYS_OF_WEEK.map((day) => (
+                        <option key={day.value} value={day.value}>
+                          {day.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {form.paymentFrequency === 'semimonthly' && (
+                    <select
+                      id="payDay"
+                      value={`${payDayConfig.semiMonthlyDays?.[0]},${payDayConfig.semiMonthlyDays?.[1]}`}
+                      onChange={(e) => {
+                        const [d1, d2] = e.target.value.split(',').map(Number);
+                        setPayDayConfig(prev => ({ ...prev, semiMonthlyDays: [d1, d2] as [number, number] }));
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                    >
+                      {SEMI_MONTHLY_SCHEDULES.map((schedule) => (
+                        <option key={schedule.value} value={schedule.value}>
+                          {schedule.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {form.paymentFrequency === 'monthly' && (
+                    <select
+                      id="payDay"
+                      value={payDayConfig.monthlyDay}
+                      onChange={(e) => setPayDayConfig(prev => ({ ...prev, monthlyDay: parseInt(e.target.value) }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                    >
+                      {DAYS_OF_MONTH.map((day) => (
+                        <option key={day.value} value={day.value}>
+                          {day.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {firstPaymentDate && (
+                    <p className="text-xs text-green-600 mt-1 font-medium">
+                      1st Payment: {firstPaymentDate.formattedDate}
+                    </p>
+                  )}
                 </div>
 
                 {/* ACV */}
