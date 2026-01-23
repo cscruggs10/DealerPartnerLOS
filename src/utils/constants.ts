@@ -40,8 +40,8 @@ export const DOWN_PAYMENT_CARWORLD_PERCENT = 0.25; // 25% to Car World
 
 // State tax rates
 export const TAX_RATES: Record<string, number> = {
-  TN: 0.0975,  // Tennessee: 9.75%
-  MS: 0.05,    // Mississippi: 5%
+  TN: 0.095,  // Tennessee: 9.5%
+  MS: 0.05,   // Mississippi: 5%
 };
 
 // Supported states

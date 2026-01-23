@@ -38,22 +38,18 @@ export interface DealCalculation {
   state: SupportedState;
   paymentFrequency: PaymentFrequency;
   paymentFrequencyLabel: string;
-  downPayment: number;              // Total customer cash at signing
+  downPayment: number;              // Total customer cash at signing (includes doc fee + tax)
 
-  // Core lease calculations (traditional methodology)
-  capitalizedCost: number;          // ACV + Doc Fee
-  capCostReduction: number;         // Full down payment amount
-  taxOnCapCostReduction: number;    // Tax on the cap cost reduction
-  netCapitalizedCost: number;       // Capitalized Cost - Cap Cost Reduction
-  residualValue: number;            // 15% of Capitalized Cost
-  depreciation: number;             // Net Cap Cost - Residual Value
-  rentCharge: number;               // (Net Cap Cost + Residual Value) × Money Factor × Term
-  totalOfPayments: number;          // Depreciation + Rent Charge
+  // Core calculations
+  residualValue: number;
+  totalOfPayments: number;
   numberOfPayments: number;
-  basePayment: number;              // (Depreciation + Rent Charge) / Number of Payments
+  basePayment: number;
 
-  // Legacy/reverse-calculated values
-  agreedPrice: number;              // For display purposes (= capitalizedCost)
+  // Reverse-calculated values
+  agreedPrice: number;
+  depreciation: number;
+  rentCharge: number;
   markup: number;
 
   // Investor/spread calculations
@@ -69,6 +65,9 @@ export interface DealCalculation {
   // Final payment values
   totalPayment: number;
   amountDueAtSigning: number;       // = downPayment (total customer cash at signing)
+
+  // Down payment breakdown
+  capCostReduction: number;         // downPayment - docFee - salesTax (reduces agreed price)
 
   // Cap cost reduction split (75/25 applied to capCostReduction only)
   downPaymentDealerShare: number;
@@ -242,8 +241,6 @@ export function calculateDownPaymentSplit(downPayment: number): DownPaymentSplit
  * Calculate the optimal term (1-48 months) that produces closest to $175 spread
  * while satisfying all constraints.
  *
- * Uses Car World methodology: Total of Payments = ACV × 2
- *
  * Constraints:
  * - Spread >= $150 (monthly equivalent)
  * - Markup <= $5,000
@@ -251,15 +248,12 @@ export function calculateDownPaymentSplit(downPayment: number): DownPaymentSplit
  */
 export function calculateOptimalTerm(
   acv: number,
-  docFee: number,
+  _docFee: number,
   _state: SupportedState,
   paymentFrequency: PaymentFrequency = 'monthly'
 ): OptimalTermResult {
   const paymentsPerYear = getPaymentsPerYear(paymentFrequency);
-  // Residual based on capitalized cost (ACV + doc fee)
-  const capitalizedCost = acv + docFee;
-  const residualValue = capitalizedCost * RESIDUAL_PERCENT;
-  // Car World methodology: Total of Payments = ACV × 2
+  const residualValue = acv * RESIDUAL_PERCENT;
   const totalOfPayments = acv * 2;
 
   let bestTerm = 36; // Default
@@ -274,7 +268,6 @@ export function calculateOptimalTerm(
     const basePayment = totalOfPayments / numberOfPayments;
     const basePaymentMonthlyEquiv = toMonthlyEquivalent(basePayment, paymentFrequency);
 
-    // Reverse-calculate agreed price from base payment
     const agreedPrice = reverseCalculateAdjustedCap(
       basePayment,
       residualValue,
@@ -324,6 +317,13 @@ export function calculateOptimalTerm(
     for (let term = MIN_TERM_MONTHS; term <= MAX_TERM_MONTHS; term++) {
       const numberOfPayments = calculateNumberOfPayments(term, paymentFrequency);
       const basePayment = totalOfPayments / numberOfPayments;
+      // agreedPrice calculated for completeness in fallback loop
+      reverseCalculateAdjustedCap(
+        basePayment,
+        residualValue,
+        term,
+        numberOfPayments
+      );
       const investorPayment = calculateAmortizedPayment(
         acv,
         INVESTOR_RATE,
@@ -375,18 +375,13 @@ export function calculateOptimalTerm(
 
 /**
  * Find valid term range for a given ACV
- * Uses Car World methodology: Total of Payments = ACV × 2
  */
 export function findValidTermRange(
   acv: number,
-  paymentFrequency: PaymentFrequency = 'monthly',
-  docFee: number = 499
+  paymentFrequency: PaymentFrequency = 'monthly'
 ): { min: number; max: number } | null {
   const paymentsPerYear = getPaymentsPerYear(paymentFrequency);
-  // Residual based on capitalized cost
-  const capitalizedCost = acv + docFee;
-  const residualValue = capitalizedCost * RESIDUAL_PERCENT;
-  // Car World methodology: Total of Payments = ACV × 2
+  const residualValue = acv * RESIDUAL_PERCENT;
   const totalOfPayments = acv * 2;
 
   let minValid: number | null = null;
@@ -397,7 +392,6 @@ export function findValidTermRange(
     const basePayment = totalOfPayments / numberOfPayments;
     const basePaymentMonthlyEquiv = toMonthlyEquivalent(basePayment, paymentFrequency);
 
-    // Reverse-calculate agreed price
     const agreedPrice = reverseCalculateAdjustedCap(
       basePayment,
       residualValue,
@@ -436,88 +430,67 @@ export function findValidTermRange(
 
 /**
  * Calculate all deal values based on ACV, term, and payment frequency.
- *
- * Car World methodology:
- *   - Total of Payments = ACV × 2 (fixed business rule)
- *   - Agreed Price reverse-calculated from base payment
- *
- * Display values (traditional lease format):
- *   - Capitalized Cost = ACV + Doc Fee
- *   - Cap Cost Reduction = Full Down Payment
- *   - Residual Value = 15% of Capitalized Cost
- *   - Depreciation & Rent Charge back-calculated for display
  */
 export function calculateDeal(input: DealInput): DealCalculation {
   const { acv, termMonths, docFee, state, paymentFrequency, downPayment = 0 } = input;
   const paymentsPerYear = getPaymentsPerYear(paymentFrequency);
 
-  // ===== CAR WORLD CORE CALCULATION (ACV × 2) =====
+  // Step 1: Calculate residual value (15% of ACV)
+  const residualValue = roundCurrency(acv * RESIDUAL_PERCENT);
 
-  // Step 1: Total of payments = ACV * 2 (Car World business rule)
+  // Step 2: Total of payments = ACV * 2
   const totalOfPayments = roundCurrency(acv * 2);
 
-  // Step 2: Number of payments based on term and frequency
+  // Step 3: Number of payments based on term and frequency
   const numberOfPayments = calculateNumberOfPayments(termMonths, paymentFrequency);
 
-  // Step 3: Base payment = total / number of payments
+  // Step 4: Base payment = total / number of payments
   const basePayment = roundCurrency(totalOfPayments / numberOfPayments);
 
-  // ===== DISPLAY VALUES (Traditional Lease Format) =====
-
-  // Capitalized Cost = ACV + Doc Fee
-  const capitalizedCost = roundCurrency(acv + docFee);
-
-  // Cap Cost Reduction = Full Down Payment
-  const capCostReduction = roundCurrency(downPayment);
-
-  // Tax on cap cost reduction
-  const taxRate = TAX_RATES[state] ?? 0;
-  const taxOnCapCostReduction = roundCurrency(capCostReduction * taxRate);
-
-  // Net Capitalized Cost = Capitalized Cost - Cap Cost Reduction
-  const netCapitalizedCost = roundCurrency(capitalizedCost - capCostReduction);
-
-  // Residual Value = 15% of Capitalized Cost (NOT ACV)
-  const residualValue = roundCurrency(capitalizedCost * RESIDUAL_PERCENT);
-
-  // Step 4: Reverse-calculate agreed price from base payment (for spread/markup validation)
+  // Step 5: Reverse-calculate agreed price from base payment
   const agreedPrice = roundCurrency(
     reverseCalculateAdjustedCap(basePayment, residualValue, termMonths, numberOfPayments)
   );
 
-  // Calculate markup (agreed price - ACV)
+  // Calculate markup
   const markup = calculateMarkup(agreedPrice, acv);
 
-  // Back-calculate depreciation and rent charge for display
+  // Calculate depreciation and rent charge for transparency
   const depreciation = roundCurrency(calculateDepreciation(agreedPrice, residualValue));
   const rentCharge = roundCurrency(
     calculateRentCharge(agreedPrice, residualValue, termMonths)
   );
 
-  // ===== TAX CALCULATIONS =====
-
-  const taxPerPayment = roundCurrency(basePayment * taxRate);
-  const salesTax = roundCurrency(taxPerPayment * numberOfPayments);
-
-  // Total payment = base payment + tax per payment
-  const totalPayment = roundCurrency(basePayment + taxPerPayment);
-
-  // ===== INVESTOR/SPREAD CALCULATIONS =====
-
+  // Step 6: Calculate investor payment (amortized at same frequency)
   const investorPayment = roundCurrency(
     calculateAmortizedPayment(acv, INVESTOR_RATE, numberOfPayments, paymentsPerYear)
   );
 
+  // Step 7: Calculate spread (profit margin per payment)
   const spread = roundCurrency(basePayment - investorPayment);
+
+  // Monthly equivalent spread for validation
   const monthlySpreadEquivalent = roundCurrency(toMonthlyEquivalent(spread, paymentFrequency));
 
-  // Amount due at signing = down payment
+  // Step 8: Calculate sales tax on payments
+  const taxRate = TAX_RATES[state] ?? 0;
+  const taxPerPayment = roundCurrency(basePayment * taxRate);
+  const salesTax = roundCurrency(taxPerPayment * numberOfPayments); // Total tax across all payments
+
+  // Step 9: Total payment = base payment + tax per payment
+  const totalPayment = roundCurrency(basePayment + taxPerPayment);
+
+  // Step 10: Amount due at signing = down payment (customer's total cash)
+  // Down payment covers: doc fee + cap cost reduction
   const amountDueAtSigning = roundCurrency(downPayment);
+
+  // Step 11: Calculate cap cost reduction (what's left after doc fee)
+  const capCostReduction = roundCurrency(Math.max(0, downPayment - docFee));
 
   // Monthly equivalent for validation display
   const basePaymentMonthlyEquivalent = roundCurrency(toMonthlyEquivalent(basePayment, paymentFrequency));
 
-  // Down payment split (75/25 applied to cap cost reduction)
+  // Down payment split (75/25 applied to cap cost reduction only, not total down payment)
   const downPaymentSplit = calculateDownPaymentSplit(capCostReduction);
 
   // ACV Recovery (50% of total payments)
@@ -533,20 +506,16 @@ export function calculateDeal(input: DealInput): DealCalculation {
     paymentFrequencyLabel: PAYMENT_FREQUENCIES[paymentFrequency].label,
     downPayment,
 
-    // Core lease calculations
-    capitalizedCost,
-    capCostReduction,
-    taxOnCapCostReduction,
-    netCapitalizedCost,
+    // Core calculations
     residualValue,
-    depreciation,
-    rentCharge,
     totalOfPayments,
     numberOfPayments,
     basePayment,
 
     // Reverse-calculated values
     agreedPrice,
+    depreciation,
+    rentCharge,
     markup,
 
     // Investor/spread calculations
@@ -562,6 +531,9 @@ export function calculateDeal(input: DealInput): DealCalculation {
     // Final payment values
     totalPayment,
     amountDueAtSigning,
+
+    // Down payment breakdown
+    capCostReduction,
 
     // Cap cost reduction split (75/25)
     downPaymentDealerShare: downPaymentSplit.dealer,
@@ -581,7 +553,6 @@ export function calculateDeal(input: DealInput): DealCalculation {
 
 /**
  * Find the maximum term that keeps monthly-equivalent payment at or above minimum.
- * Uses Car World methodology: Total of Payments = ACV × 2
  */
 export function findMaxTermForMinPayment(acv: number, frequency: PaymentFrequency): number | undefined {
   const totalOfPayments = acv * 2;
@@ -597,14 +568,13 @@ export function findMaxTermForMinPayment(acv: number, frequency: PaymentFrequenc
 
 /**
  * Find the minimum term that achieves the minimum monthly-equivalent spread.
- * Uses Car World methodology: Total of Payments = ACV × 2
  */
 export function findMinTermForMinSpread(acv: number, frequency: PaymentFrequency): number | undefined {
   const validTerms = [12, 24, 36, 48, 60, 72];
   const paymentsPerYear = getPaymentsPerYear(frequency);
-  const totalOfPayments = acv * 2;
 
   for (const term of validTerms) {
+    const totalOfPayments = acv * 2;
     const numberOfPayments = calculateNumberOfPayments(term, frequency);
     const basePayment = totalOfPayments / numberOfPayments;
     const investorPayment = calculateAmortizedPayment(acv, INVESTOR_RATE, numberOfPayments, paymentsPerYear);
@@ -620,12 +590,10 @@ export function findMinTermForMinSpread(acv: number, frequency: PaymentFrequency
 }
 
 /**
- * Find term that brings markup within limit.
- * Uses Car World methodology with residual based on capitalized cost.
+ * Find term that brings markup within limit
  */
-export function findTermForMaxMarkup(acv: number, frequency: PaymentFrequency, docFee: number = 499): number | undefined {
-  const capitalizedCost = acv + docFee;
-  const residualValue = capitalizedCost * RESIDUAL_PERCENT;
+export function findTermForMaxMarkup(acv: number, frequency: PaymentFrequency): number | undefined {
+  const residualValue = acv * RESIDUAL_PERCENT;
   const totalOfPayments = acv * 2;
 
   // Start from short term (higher markup) and go longer until markup is within limit
