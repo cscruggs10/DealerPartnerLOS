@@ -814,7 +814,7 @@ export function DealCalculator() {
                       <span className="text-2xl font-bold">{formatCurrency(calculation.basePayment)}</span>
                     </div>
                     <div className="flex justify-between items-baseline">
-                      <span className="text-blue-200">Tax per Payment</span>
+                      <span className="text-blue-200">Tax ({(calculation.taxRate * 100).toFixed(2)}%)</span>
                       <span className="text-lg">{formatCurrency(calculation.taxPerPayment)}</span>
                     </div>
                     <div className="border-t border-blue-600 pt-3">
@@ -864,25 +864,37 @@ export function DealCalculator() {
                   </div>
                 </div>
 
-                {/* Down Payment Split */}
+                {/* Down Payment Breakdown */}
                 {calculation.downPayment > 0 && (
                   <div className="bg-white rounded-lg shadow-md p-5">
                     <h3 className="text-sm font-semibold text-gray-600 mb-3 uppercase tracking-wide">
-                      Down Payment Split
+                      Customer Cash Breakdown
                     </h3>
                     <div className="space-y-2 text-sm">
-                      <div className="flex justify-between py-1">
-                        <span className="text-gray-600">Customer Down Payment</span>
-                        <span className="font-semibold text-gray-900">{formatCurrency(calculation.downPayment)}</span>
+                      <div className="flex justify-between py-1 border-b pb-2">
+                        <span className="text-gray-700 font-medium">Total Customer Cash</span>
+                        <span className="font-bold text-gray-900">{formatCurrency(calculation.downPayment)}</span>
                       </div>
                       <div className="flex justify-between py-1">
-                        <span className="text-gray-600">Dealer Share (75%)</span>
-                        <span className="font-semibold text-green-600">{formatCurrency(calculation.downPaymentDealerShare)}</span>
+                        <span className="text-gray-600">Doc Fee</span>
+                        <span className="font-semibold text-gray-900">-{formatCurrency(calculation.docFee)}</span>
                       </div>
-                      <div className="flex justify-between py-1">
-                        <span className="text-gray-600">Car World Share (25%)</span>
-                        <span className="font-semibold text-blue-600">{formatCurrency(calculation.downPaymentCarWorldShare)}</span>
+                      <div className="flex justify-between py-1 border-t pt-2">
+                        <span className="text-gray-700 font-medium">Cap Cost Reduction</span>
+                        <span className="font-bold text-gray-900">{formatCurrency(calculation.capCostReduction)}</span>
                       </div>
+                      {calculation.capCostReduction > 0 && (
+                        <>
+                          <div className="flex justify-between py-1 pl-4 text-xs">
+                            <span className="text-gray-500">Dealer Share (75%)</span>
+                            <span className="font-semibold text-green-600">{formatCurrency(calculation.downPaymentDealerShare)}</span>
+                          </div>
+                          <div className="flex justify-between py-1 pl-4 text-xs">
+                            <span className="text-gray-500">Car World Share (25%)</span>
+                            <span className="font-semibold text-blue-600">{formatCurrency(calculation.downPaymentCarWorldShare)}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}

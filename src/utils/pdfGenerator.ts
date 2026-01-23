@@ -279,18 +279,18 @@ export function generateLeasePDF(contractData: ContractData): void {
   doc.text('* Itemization of Amount Due at Lease Signing or Delivery', margin, y);
   y += 15;
 
-  const firstPayment = calculation.totalPayment;
-  const capCostReduction = calculation.downPayment;
+  const capCostReduction = calculation.capCostReduction;
   const docFee = calculation.docFee;
-  const itemTotal = capCostReduction + firstPayment + docFee;
+  // Amount due at signing = down payment (which is doc fee + cap cost reduction)
+  const itemTotal = calculation.downPayment;
 
   autoTable(doc, {
     startY: y,
     head: [['Amount due at Signing:', '', 'How the amount due will be paid:', '']],
     body: [
       ['Capitalized Cost Reduction', '+' + formatCurrency(capCostReduction), 'Net Trade-In allowance', '$ ___________'],
-      ['First Periodic Payment', '+' + formatCurrency(firstPayment), 'Rebates and non-cash credits', '+$ ___________'],
-      ['Documentation fees', '+' + formatCurrency(docFee), 'Amount to be paid in cash', '+' + formatCurrency(itemTotal)],
+      ['Documentation fees', '+' + formatCurrency(docFee), 'Rebates and non-cash credits', '+$ ___________'],
+      ['', '', 'Amount to be paid in cash', '+' + formatCurrency(itemTotal)],
       [{ content: 'Total', styles: { fontStyle: 'bold', halign: 'right' } }, { content: '=' + formatCurrency(itemTotal), styles: { fontStyle: 'bold' } }, { content: 'Total', styles: { fontStyle: 'bold', halign: 'right' } }, { content: '=' + formatCurrency(itemTotal), styles: { fontStyle: 'bold' } }],
     ],
     theme: 'grid',

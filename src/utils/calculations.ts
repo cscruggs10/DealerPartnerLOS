@@ -38,7 +38,7 @@ export interface DealCalculation {
   state: SupportedState;
   paymentFrequency: PaymentFrequency;
   paymentFrequencyLabel: string;
-  downPayment: number;
+  downPayment: number;              // Total customer cash at signing (includes doc fee + tax)
 
   // Core calculations
   residualValue: number;
@@ -64,9 +64,12 @@ export interface DealCalculation {
 
   // Final payment values
   totalPayment: number;
-  amountDueAtSigning: number;
+  amountDueAtSigning: number;       // = downPayment (total customer cash at signing)
 
-  // Down payment split
+  // Down payment breakdown
+  capCostReduction: number;         // downPayment - docFee - salesTax (reduces agreed price)
+
+  // Cap cost reduction split (75/25 applied to capCostReduction only)
   downPaymentDealerShare: number;
   downPaymentCarWorldShare: number;
 
@@ -469,22 +472,26 @@ export function calculateDeal(input: DealInput): DealCalculation {
   // Monthly equivalent spread for validation
   const monthlySpreadEquivalent = roundCurrency(toMonthlyEquivalent(spread, paymentFrequency));
 
-  // Step 8: Calculate sales tax based on state
+  // Step 8: Calculate sales tax on payments
   const taxRate = TAX_RATES[state] ?? 0;
-  const salesTax = roundCurrency(agreedPrice * taxRate);
-  const taxPerPayment = roundCurrency(salesTax / numberOfPayments);
+  const taxPerPayment = roundCurrency(basePayment * taxRate);
+  const salesTax = roundCurrency(taxPerPayment * numberOfPayments); // Total tax across all payments
 
   // Step 9: Total payment = base payment + tax per payment
   const totalPayment = roundCurrency(basePayment + taxPerPayment);
 
-  // Step 10: Amount due at signing = first payment + doc fee + down payment
-  const amountDueAtSigning = roundCurrency(totalPayment + docFee + downPayment);
+  // Step 10: Amount due at signing = down payment (customer's total cash)
+  // Down payment covers: doc fee + cap cost reduction
+  const amountDueAtSigning = roundCurrency(downPayment);
+
+  // Step 11: Calculate cap cost reduction (what's left after doc fee)
+  const capCostReduction = roundCurrency(Math.max(0, downPayment - docFee));
 
   // Monthly equivalent for validation display
   const basePaymentMonthlyEquivalent = roundCurrency(toMonthlyEquivalent(basePayment, paymentFrequency));
 
-  // Down payment split
-  const downPaymentSplit = calculateDownPaymentSplit(downPayment);
+  // Down payment split (75/25 applied to cap cost reduction only, not total down payment)
+  const downPaymentSplit = calculateDownPaymentSplit(capCostReduction);
 
   // ACV Recovery (50% of total payments)
   const acvRecovery = roundCurrency(totalOfPayments * 0.5);
@@ -525,7 +532,10 @@ export function calculateDeal(input: DealInput): DealCalculation {
     totalPayment,
     amountDueAtSigning,
 
-    // Down payment split
+    // Down payment breakdown
+    capCostReduction,
+
+    // Cap cost reduction split (75/25)
     downPaymentDealerShare: downPaymentSplit.dealer,
     downPaymentCarWorldShare: downPaymentSplit.carWorld,
 
