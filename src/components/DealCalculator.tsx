@@ -16,7 +16,7 @@ import {
   type SupportedState,
   type PaymentFrequency,
 } from '../utils/constants';
-import { downloadLeaseDocument } from '../utils/documentGenerator';
+import { downloadLeasePDF } from '../utils/pdfGenerator';
 
 interface FormState {
   state: SupportedState;
@@ -117,7 +117,7 @@ export function DealCalculator() {
 
     setIsGenerating(true);
     try {
-      await downloadLeaseDocument(calculation);
+      await downloadLeasePDF(calculation);
     } catch (error) {
       console.error('Failed to generate document:', error);
       alert('Failed to generate document. Please try again.');
