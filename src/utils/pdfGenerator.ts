@@ -119,9 +119,14 @@ export function generateLeasePDF(contractData: ContractData): void {
   doc.setFont('helvetica', 'normal');
   doc.text(`${checkboxChar(isWeekly)} Weekly   ${checkboxChar(isBiweekly)} Bi-weekly   ${checkboxChar(isSemimonthly)} Semi-Monthly   ${checkboxChar(isMonthly)} Monthly`, margin + 95, y);
 
+  // Contract date = today's date
+  const today = new Date();
+  const contractDate = `${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getDate().toString().padStart(2, '0')}/${today.getFullYear()}`;
+
   doc.setFont('helvetica', 'bold');
   doc.text('Date:', margin + 350, y);
-  doc.text('_______________', margin + 380, y);
+  doc.setFont('helvetica', 'normal');
+  doc.text(contractDate, margin + 380, y);
 
   doc.text('Stock #:', margin + 470, y);
   doc.text('________', margin + 510, y);
