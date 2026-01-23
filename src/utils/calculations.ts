@@ -430,6 +430,10 @@ export function findValidTermRange(
 
 /**
  * Calculate all deal values based on ACV, term, and payment frequency.
+ *
+ * Key formula: Total of Payments = (ACV × 2) - Cap Cost Reduction
+ * Cap Cost Reduction = Full Down Payment (reduces customer's payment obligation)
+ * Agreed Price increases to maintain target spread when down payment is applied.
  */
 export function calculateDeal(input: DealInput): DealCalculation {
   const { acv, termMonths, docFee, state, paymentFrequency, downPayment = 0 } = input;
@@ -438,16 +442,22 @@ export function calculateDeal(input: DealInput): DealCalculation {
   // Step 1: Calculate residual value (15% of ACV)
   const residualValue = roundCurrency(acv * RESIDUAL_PERCENT);
 
-  // Step 2: Total of payments = ACV * 2
-  const totalOfPayments = roundCurrency(acv * 2);
+  // Step 2: Cap Cost Reduction = Full Down Payment
+  const capCostReduction = roundCurrency(downPayment);
 
-  // Step 3: Number of payments based on term and frequency
+  // Step 3: Total of payments = (ACV × 2) - Cap Cost Reduction
+  // Down payment reduces the total amount customer pays through payments
+  const grossTotalOfPayments = roundCurrency(acv * 2);
+  const totalOfPayments = roundCurrency(grossTotalOfPayments - capCostReduction);
+
+  // Step 4: Number of payments based on term and frequency
   const numberOfPayments = calculateNumberOfPayments(termMonths, paymentFrequency);
 
-  // Step 4: Base payment = total / number of payments
+  // Step 5: Base payment = adjusted total / number of payments
   const basePayment = roundCurrency(totalOfPayments / numberOfPayments);
 
-  // Step 5: Reverse-calculate agreed price from base payment
+  // Step 6: Reverse-calculate agreed price from base payment
+  // Agreed price will be higher when down payment is applied to maintain spread
   const agreedPrice = roundCurrency(
     reverseCalculateAdjustedCap(basePayment, residualValue, termMonths, numberOfPayments)
   );
@@ -461,40 +471,36 @@ export function calculateDeal(input: DealInput): DealCalculation {
     calculateRentCharge(agreedPrice, residualValue, termMonths)
   );
 
-  // Step 6: Calculate investor payment (amortized at same frequency)
+  // Step 7: Calculate investor payment (amortized at same frequency)
   const investorPayment = roundCurrency(
     calculateAmortizedPayment(acv, INVESTOR_RATE, numberOfPayments, paymentsPerYear)
   );
 
-  // Step 7: Calculate spread (profit margin per payment)
+  // Step 8: Calculate spread (profit margin per payment)
   const spread = roundCurrency(basePayment - investorPayment);
 
   // Monthly equivalent spread for validation
   const monthlySpreadEquivalent = roundCurrency(toMonthlyEquivalent(spread, paymentFrequency));
 
-  // Step 8: Calculate sales tax on payments
+  // Step 9: Calculate sales tax on payments
   const taxRate = TAX_RATES[state] ?? 0;
   const taxPerPayment = roundCurrency(basePayment * taxRate);
   const salesTax = roundCurrency(taxPerPayment * numberOfPayments); // Total tax across all payments
 
-  // Step 9: Total payment = base payment + tax per payment
+  // Step 10: Total payment = base payment + tax per payment
   const totalPayment = roundCurrency(basePayment + taxPerPayment);
 
-  // Step 10: Amount due at signing = down payment (customer's total cash)
-  // Down payment covers: doc fee + cap cost reduction
+  // Step 11: Amount due at signing = down payment (customer's total cash)
   const amountDueAtSigning = roundCurrency(downPayment);
-
-  // Step 11: Calculate cap cost reduction (what's left after doc fee)
-  const capCostReduction = roundCurrency(Math.max(0, downPayment - docFee));
 
   // Monthly equivalent for validation display
   const basePaymentMonthlyEquivalent = roundCurrency(toMonthlyEquivalent(basePayment, paymentFrequency));
 
-  // Down payment split (75/25 applied to cap cost reduction only, not total down payment)
+  // Down payment split (75/25 applied to cap cost reduction)
   const downPaymentSplit = calculateDownPaymentSplit(capCostReduction);
 
-  // ACV Recovery (50% of total payments)
-  const acvRecovery = roundCurrency(totalOfPayments * 0.5);
+  // ACV Recovery (50% of gross total payments, before cap cost reduction)
+  const acvRecovery = roundCurrency(grossTotalOfPayments * 0.5);
 
   return {
     // Input values
