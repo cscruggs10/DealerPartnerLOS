@@ -4,8 +4,15 @@ import {
   INVESTOR_RATE,
   MIN_MONTHLY_PAYMENT_EQUIVALENT,
   MIN_SPREAD,
+  TARGET_SPREAD,
+  MAX_MARKUP,
+  MIN_BASE_PAYMENT,
+  DOWN_PAYMENT_DEALER_PERCENT,
+  DOWN_PAYMENT_CARWORLD_PERCENT,
   TAX_RATES,
   PAYMENT_FREQUENCIES,
+  MAX_TERM_MONTHS,
+  MIN_TERM_MONTHS,
   type SupportedState,
   type PaymentFrequency,
 } from './constants';
@@ -20,6 +27,7 @@ export interface DealInput {
   docFee: number;                   // Documentation fee
   state: SupportedState;            // State for tax calculation
   paymentFrequency: PaymentFrequency; // Customer payment frequency
+  downPayment?: number;             // Optional down payment
 }
 
 export interface DealCalculation {
@@ -30,6 +38,7 @@ export interface DealCalculation {
   state: SupportedState;
   paymentFrequency: PaymentFrequency;
   paymentFrequencyLabel: string;
+  downPayment: number;
 
   // Core calculations
   residualValue: number;
@@ -41,6 +50,7 @@ export interface DealCalculation {
   agreedPrice: number;
   depreciation: number;
   rentCharge: number;
+  markup: number;
 
   // Investor/spread calculations
   investorPayment: number;
@@ -56,8 +66,15 @@ export interface DealCalculation {
   totalPayment: number;
   amountDueAtSigning: number;
 
+  // Down payment split
+  downPaymentDealerShare: number;
+  downPaymentCarWorldShare: number;
+
   // Monthly equivalents for validation display
   basePaymentMonthlyEquivalent: number;
+
+  // ACV Recovery (for lender metrics)
+  acvRecovery: number;
 }
 
 export interface ValidationError {
@@ -69,6 +86,27 @@ export interface ValidationError {
 export interface ValidationResult {
   isValid: boolean;
   errors: ValidationError[];
+  validTermRange?: {
+    min: number;
+    max: number;
+  };
+}
+
+export interface OptimalTermResult {
+  term: number;
+  isValid: boolean;
+  spread: number;
+  markup: number;
+  basePayment: number;
+  validRange: {
+    min: number;
+    max: number;
+  };
+}
+
+export interface DownPaymentSplit {
+  dealer: number;
+  carWorld: number;
 }
 
 // ============================================================================
@@ -101,12 +139,6 @@ export function fromMonthlyEquivalent(monthlyAmount: number, frequency: PaymentF
 /**
  * Calculate amortized loan payment using standard formula:
  * P * [r(1+r)^n] / [(1+r)^n - 1]
- *
- * @param principal - Loan amount
- * @param annualRate - Annual interest rate (decimal)
- * @param numberOfPayments - Total number of payments
- * @param paymentsPerYear - Number of payments per year (12 for monthly, 52 for weekly, etc.)
- * @returns Payment amount per period
  */
 export function calculateAmortizedPayment(
   principal: number,
@@ -116,7 +148,6 @@ export function calculateAmortizedPayment(
 ): number {
   const periodicRate = annualRate / paymentsPerYear;
 
-  // Handle edge case of 0% interest
   if (periodicRate === 0) {
     return principal / numberOfPayments;
   }
@@ -129,20 +160,6 @@ export function calculateAmortizedPayment(
 
 /**
  * Reverse-calculate the adjusted capitalized cost from base payment.
- *
- * Lease formula: basePayment = (depreciation + rentCharge) / numberOfPayments
- * Where:
- *   depreciation = adjustedCap - residual
- *   rentCharge = (adjustedCap + residual) * MF * termMonths
- *
- * Note: Money factor is always calculated on a monthly basis regardless of payment frequency
- *
- * @param basePayment - The target payment per period
- * @param residualValue - The residual value of the vehicle
- * @param termMonths - Lease term in months
- * @param numberOfPayments - Total number of payments
- * @param moneyFactor - Money factor for lease (monthly basis)
- * @returns The adjusted capitalized cost
  */
 export function reverseCalculateAdjustedCap(
   basePayment: number,
@@ -151,17 +168,8 @@ export function reverseCalculateAdjustedCap(
   numberOfPayments: number,
   moneyFactor: number = MONEY_FACTOR
 ): number {
-  // Total of base payments
   const totalBasePayments = basePayment * numberOfPayments;
-
-  // Money factor term (always monthly basis)
   const mfTerm = moneyFactor * termMonths;
-
-  // Solving: totalBasePayments = (adjustedCap - residual) + (adjustedCap + residual) * MF * termMonths
-  // totalBasePayments = adjustedCap - residual + adjustedCap * mfTerm + residual * mfTerm
-  // totalBasePayments = adjustedCap * (1 + mfTerm) + residual * (mfTerm - 1)
-  // adjustedCap = (totalBasePayments - residual * (mfTerm - 1)) / (1 + mfTerm)
-
   const numerator = totalBasePayments - residualValue * (mfTerm - 1);
   const denominator = 1 + mfTerm;
 
@@ -205,28 +213,223 @@ export function calculateNumberOfPayments(termMonths: number, frequency: Payment
   return Math.round(termMonths * (paymentsPerYear / 12));
 }
 
+/**
+ * Calculate markup (agreed price - ACV)
+ */
+export function calculateMarkup(agreedPrice: number, acv: number): number {
+  return roundCurrency(agreedPrice - acv);
+}
+
+/**
+ * Calculate down payment split between dealer and Car World
+ */
+export function calculateDownPaymentSplit(downPayment: number): DownPaymentSplit {
+  return {
+    dealer: roundCurrency(downPayment * DOWN_PAYMENT_DEALER_PERCENT),
+    carWorld: roundCurrency(downPayment * DOWN_PAYMENT_CARWORLD_PERCENT),
+  };
+}
+
+// ============================================================================
+// Optimal Term Calculation
+// ============================================================================
+
+/**
+ * Calculate the optimal term (1-48 months) that produces closest to $175 spread
+ * while satisfying all constraints.
+ *
+ * Constraints:
+ * - Spread >= $150 (monthly equivalent)
+ * - Markup <= $5,000
+ * - Base Payment >= $300 (monthly equivalent)
+ */
+export function calculateOptimalTerm(
+  acv: number,
+  _docFee: number,
+  _state: SupportedState,
+  paymentFrequency: PaymentFrequency = 'monthly'
+): OptimalTermResult {
+  const paymentsPerYear = getPaymentsPerYear(paymentFrequency);
+  const residualValue = acv * RESIDUAL_PERCENT;
+  const totalOfPayments = acv * 2;
+
+  let bestTerm = 36; // Default
+  let bestSpreadDiff = Infinity;
+  let minValidTerm = MAX_TERM_MONTHS;
+  let maxValidTerm = MIN_TERM_MONTHS;
+  let bestIsValid = false;
+
+  // Try each term from 1 to 48
+  for (let term = MIN_TERM_MONTHS; term <= MAX_TERM_MONTHS; term++) {
+    const numberOfPayments = calculateNumberOfPayments(term, paymentFrequency);
+    const basePayment = totalOfPayments / numberOfPayments;
+    const basePaymentMonthlyEquiv = toMonthlyEquivalent(basePayment, paymentFrequency);
+
+    const agreedPrice = reverseCalculateAdjustedCap(
+      basePayment,
+      residualValue,
+      term,
+      numberOfPayments
+    );
+
+    const markup = agreedPrice - acv;
+
+    const investorPayment = calculateAmortizedPayment(
+      acv,
+      INVESTOR_RATE,
+      numberOfPayments,
+      paymentsPerYear
+    );
+
+    const spread = basePayment - investorPayment;
+    const monthlySpread = toMonthlyEquivalent(spread, paymentFrequency);
+
+    // Check if this term meets all constraints
+    const meetsSpread = monthlySpread >= MIN_SPREAD;
+    const meetsMarkup = markup <= MAX_MARKUP;
+    const meetsPayment = basePaymentMonthlyEquiv >= MIN_BASE_PAYMENT;
+    const isValid = meetsSpread && meetsMarkup && meetsPayment;
+
+    if (isValid) {
+      // Track valid term range
+      if (term < minValidTerm) minValidTerm = term;
+      if (term > maxValidTerm) maxValidTerm = term;
+
+      // Find term closest to target spread
+      const spreadDiff = Math.abs(monthlySpread - TARGET_SPREAD);
+      if (spreadDiff < bestSpreadDiff) {
+        bestSpreadDiff = spreadDiff;
+        bestTerm = term;
+        bestIsValid = true;
+      }
+    }
+  }
+
+  // If no valid term found, find the best invalid one
+  if (!bestIsValid) {
+    minValidTerm = 0;
+    maxValidTerm = 0;
+
+    // Try to find something workable
+    for (let term = MIN_TERM_MONTHS; term <= MAX_TERM_MONTHS; term++) {
+      const numberOfPayments = calculateNumberOfPayments(term, paymentFrequency);
+      const basePayment = totalOfPayments / numberOfPayments;
+      // agreedPrice calculated for completeness in fallback loop
+      reverseCalculateAdjustedCap(
+        basePayment,
+        residualValue,
+        term,
+        numberOfPayments
+      );
+      const investorPayment = calculateAmortizedPayment(
+        acv,
+        INVESTOR_RATE,
+        numberOfPayments,
+        paymentsPerYear
+      );
+      const spread = basePayment - investorPayment;
+      const monthlySpread = toMonthlyEquivalent(spread, paymentFrequency);
+
+      const spreadDiff = Math.abs(monthlySpread - TARGET_SPREAD);
+      if (spreadDiff < bestSpreadDiff) {
+        bestSpreadDiff = spreadDiff;
+        bestTerm = term;
+      }
+    }
+  }
+
+  // Calculate values for the best term
+  const numberOfPayments = calculateNumberOfPayments(bestTerm, paymentFrequency);
+  const basePayment = totalOfPayments / numberOfPayments;
+  const agreedPrice = reverseCalculateAdjustedCap(
+    basePayment,
+    residualValue,
+    bestTerm,
+    numberOfPayments
+  );
+  const markup = agreedPrice - acv;
+  const investorPayment = calculateAmortizedPayment(
+    acv,
+    INVESTOR_RATE,
+    numberOfPayments,
+    paymentsPerYear
+  );
+  const spread = basePayment - investorPayment;
+  const monthlySpread = toMonthlyEquivalent(spread, paymentFrequency);
+
+  return {
+    term: bestTerm,
+    isValid: bestIsValid,
+    spread: roundCurrency(monthlySpread),
+    markup: roundCurrency(markup),
+    basePayment: roundCurrency(toMonthlyEquivalent(basePayment, paymentFrequency)),
+    validRange: {
+      min: minValidTerm,
+      max: maxValidTerm,
+    },
+  };
+}
+
+/**
+ * Find valid term range for a given ACV
+ */
+export function findValidTermRange(
+  acv: number,
+  paymentFrequency: PaymentFrequency = 'monthly'
+): { min: number; max: number } | null {
+  const paymentsPerYear = getPaymentsPerYear(paymentFrequency);
+  const residualValue = acv * RESIDUAL_PERCENT;
+  const totalOfPayments = acv * 2;
+
+  let minValid: number | null = null;
+  let maxValid: number | null = null;
+
+  for (let term = MIN_TERM_MONTHS; term <= MAX_TERM_MONTHS; term++) {
+    const numberOfPayments = calculateNumberOfPayments(term, paymentFrequency);
+    const basePayment = totalOfPayments / numberOfPayments;
+    const basePaymentMonthlyEquiv = toMonthlyEquivalent(basePayment, paymentFrequency);
+
+    const agreedPrice = reverseCalculateAdjustedCap(
+      basePayment,
+      residualValue,
+      term,
+      numberOfPayments
+    );
+    const markup = agreedPrice - acv;
+
+    const investorPayment = calculateAmortizedPayment(
+      acv,
+      INVESTOR_RATE,
+      numberOfPayments,
+      paymentsPerYear
+    );
+    const spread = basePayment - investorPayment;
+    const monthlySpread = toMonthlyEquivalent(spread, paymentFrequency);
+
+    const isValid =
+      monthlySpread >= MIN_SPREAD &&
+      markup <= MAX_MARKUP &&
+      basePaymentMonthlyEquiv >= MIN_BASE_PAYMENT;
+
+    if (isValid) {
+      if (minValid === null) minValid = term;
+      maxValid = term;
+    }
+  }
+
+  if (minValid === null || maxValid === null) return null;
+  return { min: minValid, max: maxValid };
+}
+
 // ============================================================================
 // Core Calculation Function
 // ============================================================================
 
 /**
  * Calculate all deal values based on ACV, term, and payment frequency.
- *
- * This function implements the Car World lease calculation methodology:
- * 1. Start with ACV and desired term
- * 2. Calculate residual (15% of ACV)
- * 3. Total of payments = ACV * 2 (customer pays 2x the vehicle value)
- * 4. Number of payments based on term and frequency
- * 5. Base payment = total / numberOfPayments
- * 6. Reverse-calculate the agreed price that produces this payment
- * 7. Calculate investor payment and spread
- * 8. Add tax based on state
- *
- * @param input - Deal input parameters
- * @returns Complete deal calculations
  */
 export function calculateDeal(input: DealInput): DealCalculation {
-  const { acv, termMonths, docFee, state, paymentFrequency } = input;
+  const { acv, termMonths, docFee, state, paymentFrequency, downPayment = 0 } = input;
   const paymentsPerYear = getPaymentsPerYear(paymentFrequency);
 
   // Step 1: Calculate residual value (15% of ACV)
@@ -245,6 +448,9 @@ export function calculateDeal(input: DealInput): DealCalculation {
   const agreedPrice = roundCurrency(
     reverseCalculateAdjustedCap(basePayment, residualValue, termMonths, numberOfPayments)
   );
+
+  // Calculate markup
+  const markup = calculateMarkup(agreedPrice, acv);
 
   // Calculate depreciation and rent charge for transparency
   const depreciation = roundCurrency(calculateDepreciation(agreedPrice, residualValue));
@@ -271,11 +477,17 @@ export function calculateDeal(input: DealInput): DealCalculation {
   // Step 9: Total payment = base payment + tax per payment
   const totalPayment = roundCurrency(basePayment + taxPerPayment);
 
-  // Step 10: Amount due at signing = first payment + doc fee
-  const amountDueAtSigning = roundCurrency(totalPayment + docFee);
+  // Step 10: Amount due at signing = first payment + doc fee + down payment
+  const amountDueAtSigning = roundCurrency(totalPayment + docFee + downPayment);
 
   // Monthly equivalent for validation display
   const basePaymentMonthlyEquivalent = roundCurrency(toMonthlyEquivalent(basePayment, paymentFrequency));
+
+  // Down payment split
+  const downPaymentSplit = calculateDownPaymentSplit(downPayment);
+
+  // ACV Recovery (50% of total payments)
+  const acvRecovery = roundCurrency(totalOfPayments * 0.5);
 
   return {
     // Input values
@@ -285,6 +497,7 @@ export function calculateDeal(input: DealInput): DealCalculation {
     state,
     paymentFrequency,
     paymentFrequencyLabel: PAYMENT_FREQUENCIES[paymentFrequency].label,
+    downPayment,
 
     // Core calculations
     residualValue,
@@ -296,6 +509,7 @@ export function calculateDeal(input: DealInput): DealCalculation {
     agreedPrice,
     depreciation,
     rentCharge,
+    markup,
 
     // Investor/spread calculations
     investorPayment,
@@ -311,8 +525,15 @@ export function calculateDeal(input: DealInput): DealCalculation {
     totalPayment,
     amountDueAtSigning,
 
+    // Down payment split
+    downPaymentDealerShare: downPaymentSplit.dealer,
+    downPaymentCarWorldShare: downPaymentSplit.carWorld,
+
     // Monthly equivalents
     basePaymentMonthlyEquivalent,
+
+    // ACV Recovery
+    acvRecovery,
   };
 }
 
@@ -322,30 +543,13 @@ export function calculateDeal(input: DealInput): DealCalculation {
 
 /**
  * Find the maximum term that keeps monthly-equivalent payment at or above minimum.
- *
- * @param acv - Actual cash value
- * @param frequency - Payment frequency
- * @returns Maximum term in months, or undefined if no valid term exists
  */
 export function findMaxTermForMinPayment(acv: number, frequency: PaymentFrequency): number | undefined {
   const totalOfPayments = acv * 2;
   const paymentsPerYear = getPaymentsPerYear(frequency);
-
-  // Monthly equivalent payment must be >= MIN_MONTHLY_PAYMENT_EQUIVALENT
-  // monthlyEquivalent = (basePayment * paymentsPerYear) / 12 >= MIN_MONTHLY_PAYMENT_EQUIVALENT
-  // basePayment >= MIN_MONTHLY_PAYMENT_EQUIVALENT * 12 / paymentsPerYear
   const minPaymentAtFrequency = (MIN_MONTHLY_PAYMENT_EQUIVALENT * 12) / paymentsPerYear;
-
-  // basePayment = totalOfPayments / numberOfPayments
-  // numberOfPayments = termMonths * (paymentsPerYear / 12)
-  // basePayment = totalOfPayments / (termMonths * paymentsPerYear / 12)
-  // basePayment = (totalOfPayments * 12) / (termMonths * paymentsPerYear)
-  // minPaymentAtFrequency = (totalOfPayments * 12) / (maxTerm * paymentsPerYear)
-  // maxTerm = (totalOfPayments * 12) / (minPaymentAtFrequency * paymentsPerYear)
-
   const maxTerm = Math.floor((totalOfPayments * 12) / (minPaymentAtFrequency * paymentsPerYear));
 
-  // Return the maximum valid term that doesn't exceed calculated max
   const validTerms = [12, 24, 36, 48, 60, 72];
   const validMaxTerm = validTerms.filter(t => t <= maxTerm).pop();
 
@@ -354,10 +558,6 @@ export function findMaxTermForMinPayment(acv: number, frequency: PaymentFrequenc
 
 /**
  * Find the minimum term that achieves the minimum monthly-equivalent spread.
- *
- * @param acv - Actual cash value
- * @param frequency - Payment frequency
- * @returns Minimum term in months, or undefined if no valid term exists
  */
 export function findMinTermForMinSpread(acv: number, frequency: PaymentFrequency): number | undefined {
   const validTerms = [12, 24, 36, 48, 60, 72];
@@ -380,10 +580,29 @@ export function findMinTermForMinSpread(acv: number, frequency: PaymentFrequency
 }
 
 /**
+ * Find term that brings markup within limit
+ */
+export function findTermForMaxMarkup(acv: number, frequency: PaymentFrequency): number | undefined {
+  const residualValue = acv * RESIDUAL_PERCENT;
+  const totalOfPayments = acv * 2;
+
+  // Start from short term (higher markup) and go longer until markup is within limit
+  for (let term = MIN_TERM_MONTHS; term <= MAX_TERM_MONTHS; term++) {
+    const numberOfPayments = calculateNumberOfPayments(term, frequency);
+    const basePayment = totalOfPayments / numberOfPayments;
+    const agreedPrice = reverseCalculateAdjustedCap(basePayment, residualValue, term, numberOfPayments);
+    const markup = agreedPrice - acv;
+
+    if (markup <= MAX_MARKUP) {
+      return term;
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Validate a deal calculation and return any errors.
- *
- * @param calculation - The deal calculation to validate
- * @returns Validation result with any errors and suggestions
  */
 export function validateDeal(calculation: DealCalculation): ValidationResult {
   const errors: ValidationError[] = [];
@@ -393,7 +612,7 @@ export function validateDeal(calculation: DealCalculation): ValidationResult {
     const maxTerm = findMaxTermForMinPayment(calculation.acv, calculation.paymentFrequency);
     errors.push({
       field: 'basePayment',
-      message: `Monthly equivalent payment $${calculation.basePaymentMonthlyEquivalent.toFixed(2)} is below minimum $${MIN_MONTHLY_PAYMENT_EQUIVALENT}`,
+      message: `Base payment $${calculation.basePaymentMonthlyEquivalent.toFixed(2)} is below $${MIN_BASE_PAYMENT} minimum`,
       suggestedValue: maxTerm,
     });
   }
@@ -403,8 +622,18 @@ export function validateDeal(calculation: DealCalculation): ValidationResult {
     const minTerm = findMinTermForMinSpread(calculation.acv, calculation.paymentFrequency);
     errors.push({
       field: 'spread',
-      message: `Monthly equivalent spread $${calculation.monthlySpreadEquivalent.toFixed(2)} is below minimum $${MIN_SPREAD}`,
+      message: `Spread $${calculation.monthlySpreadEquivalent.toFixed(2)} is below $${MIN_SPREAD} minimum`,
       suggestedValue: minTerm,
+    });
+  }
+
+  // Check maximum markup
+  if (calculation.markup > MAX_MARKUP) {
+    const suggestedTerm = findTermForMaxMarkup(calculation.acv, calculation.paymentFrequency);
+    errors.push({
+      field: 'markup',
+      message: `Markup $${calculation.markup.toFixed(2)} exceeds $${MAX_MARKUP.toLocaleString()} maximum`,
+      suggestedValue: suggestedTerm,
     });
   }
 
@@ -431,9 +660,13 @@ export function validateDeal(calculation: DealCalculation): ValidationResult {
     });
   }
 
+  // Get valid term range
+  const validRange = findValidTermRange(calculation.acv, calculation.paymentFrequency);
+
   return {
     isValid: errors.length === 0,
     errors,
+    validTermRange: validRange ?? undefined,
   };
 }
 

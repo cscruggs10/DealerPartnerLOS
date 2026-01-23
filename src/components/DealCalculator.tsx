@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   calculateDeal,
   validateDeal,
+  calculateOptimalTerm,
   formatCurrency,
   type DealCalculation,
   type ValidationResult,
@@ -10,6 +11,8 @@ import {
   TAX_RATES,
   PAYMENT_FREQUENCIES,
   MIN_SPREAD,
+  MAX_MARKUP,
+  MAX_TERM_MONTHS,
   type SupportedState,
   type PaymentFrequency,
 } from '../utils/constants';
@@ -19,6 +22,7 @@ interface FormState {
   acv: string;
   termMonths: string;
   docFee: string;
+  downPayment: string;
   paymentFrequency: PaymentFrequency;
 }
 
@@ -40,27 +44,48 @@ export function DealCalculator() {
     acv: '',
     termMonths: '',
     docFee: '499',
+    downPayment: '0',
     paymentFrequency: 'biweekly',
   });
+
+  const [autoTermApplied, setAutoTermApplied] = useState(false);
 
   // Parse form values
   const acv = parseFloat(form.acv.replace(/[^0-9.]/g, '')) || 0;
   const termMonths = parseInt(form.termMonths, 10) || 0;
   const docFee = parseFloat(form.docFee.replace(/[^0-9.]/g, '')) || 0;
+  const downPayment = parseFloat(form.downPayment.replace(/[^0-9.]/g, '')) || 0;
+
+  // Auto-calculate optimal term when ACV changes
+  useEffect(() => {
+    if (acv > 0 && docFee >= 0 && !autoTermApplied) {
+      const optimal = calculateOptimalTerm(acv, docFee, form.state, form.paymentFrequency);
+      if (optimal.term > 0) {
+        setForm(prev => ({ ...prev, termMonths: optimal.term.toString() }));
+        setAutoTermApplied(true);
+      }
+    }
+  }, [acv, docFee, form.state, form.paymentFrequency, autoTermApplied]);
+
+  // Reset auto-term flag when ACV changes significantly
+  useEffect(() => {
+    setAutoTermApplied(false);
+  }, [form.acv]);
 
   // Calculate deal when we have valid inputs
   const calculation = useMemo<DealCalculation | null>(() => {
-    if (acv > 0 && termMonths > 0 && termMonths <= 48) {
+    if (acv > 0 && termMonths > 0 && termMonths <= MAX_TERM_MONTHS) {
       return calculateDeal({
         acv,
         termMonths,
         docFee,
         state: form.state,
         paymentFrequency: form.paymentFrequency,
+        downPayment,
       });
     }
     return null;
-  }, [acv, termMonths, docFee, form.state, form.paymentFrequency]);
+  }, [acv, termMonths, docFee, form.state, form.paymentFrequency, downPayment]);
 
   // Validate deal
   const validation = useMemo<ValidationResult | null>(() => {
@@ -77,75 +102,155 @@ export function DealCalculator() {
   };
 
   // Format currency input on blur
-  const handleCurrencyBlur = (field: 'acv' | 'docFee') => () => {
+  const handleCurrencyBlur = (field: 'acv' | 'docFee' | 'downPayment') => () => {
     const value = parseFloat(form[field].replace(/[^0-9.]/g, '')) || 0;
-    if (value > 0) {
+    if (value >= 0) {
       setForm((prev) => ({ ...prev, [field]: value.toFixed(2) }));
     }
   };
 
+  const validRange = validation?.validTermRange;
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-blue-900 text-white py-6 shadow-lg">
+      <header className="bg-blue-800 text-white py-5 shadow-lg">
         <div className="max-w-6xl mx-auto px-4">
           <h1 className="text-2xl md:text-3xl font-bold">Car World Lease Calculator</h1>
-          <p className="text-blue-200 mt-1">Dealer Partner Portal</p>
+          <p className="text-blue-200 text-sm mt-1">Dealer Partner Portal</p>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <main className="max-w-6xl mx-auto px-4 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Side - Form */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">Deal Information</h2>
+          <div className="space-y-6">
+            {/* Deal Information */}
+            <div className="bg-white rounded-lg shadow-md p-5">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Deal Information
+              </h2>
 
-            <div className="space-y-5">
-              {/* State */}
-              <div>
-                <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-1">
-                  State
-                </label>
-                <select
-                  id="state"
-                  value={form.state}
-                  onChange={handleInputChange('state')}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
-                >
-                  {STATES.map((state) => (
-                    <option key={state.value} value={state.value}>
-                      {state.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">
-                  Tax Rate: {(TAX_RATES[form.state] * 100).toFixed(2)}%
-                </p>
-              </div>
-
-              {/* ACV */}
-              <div>
-                <label htmlFor="acv" className="block text-sm font-medium text-gray-700 mb-1">
-                  ACV (Actual Cash Value)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                  <input
-                    id="acv"
-                    type="text"
-                    inputMode="decimal"
-                    value={form.acv}
-                    onChange={handleInputChange('acv')}
-                    onBlur={handleCurrencyBlur('acv')}
-                    placeholder="0.00"
-                    className="w-full pl-8 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-                  />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* State */}
+                <div>
+                  <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-1">
+                    State
+                  </label>
+                  <select
+                    id="state"
+                    value={form.state}
+                    onChange={handleInputChange('state')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                  >
+                    {STATES.map((state) => (
+                      <option key={state.value} value={state.value}>
+                        {state.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Tax: {(TAX_RATES[form.state] * 100).toFixed(2)}%
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Vehicle purchase price</p>
-              </div>
 
-              {/* Term */}
+                {/* Payment Frequency */}
+                <div>
+                  <label htmlFor="frequency" className="block text-sm font-medium text-gray-700 mb-1">
+                    Pay Frequency
+                  </label>
+                  <select
+                    id="frequency"
+                    value={form.paymentFrequency}
+                    onChange={handleInputChange('paymentFrequency')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                  >
+                    {FREQUENCIES.map((freq) => (
+                      <option key={freq.value} value={freq.value}>
+                        {freq.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {PAYMENT_FREQUENCIES[form.paymentFrequency].paymentsPerYear}/year
+                  </p>
+                </div>
+
+                {/* ACV */}
+                <div>
+                  <label htmlFor="acv" className="block text-sm font-medium text-gray-700 mb-1">
+                    ACV (Lender Cost)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                    <input
+                      id="acv"
+                      type="text"
+                      inputMode="decimal"
+                      value={form.acv}
+                      onChange={handleInputChange('acv')}
+                      onBlur={handleCurrencyBlur('acv')}
+                      placeholder="0.00"
+                      className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    />
+                  </div>
+                </div>
+
+                {/* Down Payment */}
+                <div>
+                  <label htmlFor="downPayment" className="block text-sm font-medium text-gray-700 mb-1">
+                    Down Payment
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                    <input
+                      id="downPayment"
+                      type="text"
+                      inputMode="decimal"
+                      value={form.downPayment}
+                      onChange={handleInputChange('downPayment')}
+                      onBlur={handleCurrencyBlur('downPayment')}
+                      placeholder="0.00"
+                      className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    />
+                  </div>
+                </div>
+
+                {/* Doc Fee */}
+                <div className="md:col-span-2">
+                  <label htmlFor="docFee" className="block text-sm font-medium text-gray-700 mb-1">
+                    Dealer Doc Fee
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                    <input
+                      id="docFee"
+                      type="text"
+                      inputMode="decimal"
+                      value={form.docFee}
+                      onChange={handleInputChange('docFee')}
+                      onBlur={handleCurrencyBlur('docFee')}
+                      placeholder="499.00"
+                      className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Lease Term */}
+            <div className="bg-white rounded-lg shadow-md p-5">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Lease Term
+              </h2>
+
               <div>
                 <label htmlFor="term" className="block text-sm font-medium text-gray-700 mb-1">
                   Term (Months)
@@ -154,67 +259,81 @@ export function DealCalculator() {
                   id="term"
                   type="number"
                   min="1"
-                  max="48"
+                  max={MAX_TERM_MONTHS}
                   value={form.termMonths}
                   onChange={handleInputChange('termMonths')}
-                  placeholder="36"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                  placeholder="Auto-calculated"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 text-lg font-medium"
                 />
-                <p className="text-xs text-gray-500 mt-1">1-48 months</p>
-              </div>
-
-              {/* Payment Frequency */}
-              <div>
-                <label htmlFor="frequency" className="block text-sm font-medium text-gray-700 mb-1">
-                  Customer Pay Frequency
-                </label>
-                <select
-                  id="frequency"
-                  value={form.paymentFrequency}
-                  onChange={handleInputChange('paymentFrequency')}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
-                >
-                  {FREQUENCIES.map((freq) => (
-                    <option key={freq.value} value={freq.value}>
-                      {freq.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">
-                  {PAYMENT_FREQUENCIES[form.paymentFrequency].paymentsPerYear} payments per year
-                </p>
-              </div>
-
-              {/* Doc Fee */}
-              <div>
-                <label htmlFor="docFee" className="block text-sm font-medium text-gray-700 mb-1">
-                  Dealer Doc Fee
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
-                  <input
-                    id="docFee"
-                    type="text"
-                    inputMode="decimal"
-                    value={form.docFee}
-                    onChange={handleInputChange('docFee')}
-                    onBlur={handleCurrencyBlur('docFee')}
-                    placeholder="499.00"
-                    className="w-full pl-8 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
-                  />
-                </div>
+                {validRange && validRange.min > 0 && (
+                  <p className="text-xs text-green-600 mt-1 font-medium">
+                    Valid range: {validRange.min} - {validRange.max} months
+                  </p>
+                )}
+                {validRange && validRange.min === 0 && (
+                  <p className="text-xs text-red-600 mt-1 font-medium">
+                    No valid term range for this ACV
+                  </p>
+                )}
+                {!validRange && acv > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Max: {MAX_TERM_MONTHS} months
+                  </p>
+                )}
               </div>
             </div>
+
+            {/* Validation Status */}
+            {validation && (
+              <div
+                className={`rounded-lg p-4 ${
+                  validation.isValid
+                    ? 'bg-green-50 border-2 border-green-400'
+                    : 'bg-red-50 border-2 border-red-400'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {validation.isValid ? (
+                    <>
+                      <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="font-bold text-green-800 text-lg">Deal Approved</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      <span className="font-bold text-red-800 text-lg">Deal Not Valid</span>
+                    </>
+                  )}
+                </div>
+                {!validation.isValid && (
+                  <ul className="mt-2 text-sm text-red-700 space-y-1">
+                    {validation.errors.map((error, idx) => (
+                      <li key={idx} className="flex items-start gap-1">
+                        <span className="text-red-500">•</span>
+                        <span>
+                          {error.message}
+                          {error.suggestedValue && (
+                            <span className="font-semibold"> Try {error.suggestedValue} months.</span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Right Side - Calculations */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-6">Payment Breakdown</h2>
-
+          <div className="space-y-6">
             {!calculation ? (
-              <div className="text-center py-12 text-gray-500">
+              <div className="bg-white rounded-lg shadow-md p-8 text-center text-gray-500">
                 <svg
-                  className="mx-auto h-12 w-12 text-gray-400 mb-4"
+                  className="mx-auto h-16 w-16 text-gray-300 mb-4"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -226,205 +345,130 @@ export function DealCalculator() {
                     d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
                   />
                 </svg>
-                <p>Enter deal information to see calculations</p>
+                <p className="text-lg">Enter ACV to see calculations</p>
+                <p className="text-sm text-gray-400 mt-1">Term will auto-calculate for optimal spread</p>
               </div>
             ) : (
-              <div className="space-y-6">
-                {/* Validation Status */}
-                {validation && (
-                  <div
-                    className={`p-4 rounded-lg ${
-                      validation.isValid
-                        ? 'bg-green-50 border border-green-200'
-                        : 'bg-red-50 border border-red-200'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      {validation.isValid ? (
-                        <>
-                          <svg
-                            className="h-5 w-5 text-green-600"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M5 13l4 4L19 7"
-                            />
-                          </svg>
-                          <span className="font-medium text-green-800">Deal Valid</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg
-                            className="h-5 w-5 text-red-600"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                            />
-                          </svg>
-                          <span className="font-medium text-red-800">Validation Failed</span>
-                        </>
-                      )}
+              <>
+                {/* Payment Summary */}
+                <div className="bg-blue-800 text-white rounded-lg shadow-lg p-5">
+                  <h3 className="text-sm font-medium text-blue-200 mb-3 uppercase tracking-wide">
+                    Payment Summary ({calculation.paymentFrequencyLabel})
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-blue-200">Base Payment</span>
+                      <span className="text-2xl font-bold">{formatCurrency(calculation.basePayment)}</span>
                     </div>
-                    {!validation.isValid && (
-                      <ul className="mt-2 text-sm text-red-700 space-y-1">
-                        {validation.errors.map((error, idx) => (
-                          <li key={idx}>
-                            {error.message}
-                            {error.suggestedValue && (
-                              <span className="font-medium">
-                                {' '}
-                                Try {error.suggestedValue} months or less.
-                              </span>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-blue-200">Tax per Payment</span>
+                      <span className="text-lg">{formatCurrency(calculation.taxPerPayment)}</span>
+                    </div>
+                    <div className="border-t border-blue-600 pt-3">
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-blue-100 font-medium">TOTAL PAYMENT</span>
+                        <span className="text-3xl font-bold text-white">{formatCurrency(calculation.totalPayment)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Deal Structure */}
+                <div className="bg-white rounded-lg shadow-md p-5">
+                  <h3 className="text-sm font-semibold text-gray-600 mb-3 uppercase tracking-wide">
+                    Deal Structure
+                  </h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-600">Agreed Price</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.agreedPrice)}</span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-600">Residual Value (15%)</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.residualValue)}</span>
+                    </div>
+                    <div className="flex justify-between py-1 items-center">
+                      <span className="text-gray-600 flex items-center gap-1">
+                        Markup
+                        {calculation.markup > MAX_MARKUP * 0.9 && calculation.markup <= MAX_MARKUP && (
+                          <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                        )}
+                      </span>
+                      <span className={`font-semibold ${calculation.markup > MAX_MARKUP ? 'text-red-600' : 'text-gray-900'}`}>
+                        {formatCurrency(calculation.markup)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1 border-t pt-2">
+                      <span className="text-gray-600">Total of Payments</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.totalOfPayments)}</span>
+                    </div>
+                    <div className="flex justify-between py-1 bg-gray-50 -mx-5 px-5 mt-2">
+                      <span className="text-gray-700 font-medium">Due at Signing</span>
+                      <span className="font-bold text-gray-900">{formatCurrency(calculation.amountDueAtSigning)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Down Payment Split */}
+                {calculation.downPayment > 0 && (
+                  <div className="bg-white rounded-lg shadow-md p-5">
+                    <h3 className="text-sm font-semibold text-gray-600 mb-3 uppercase tracking-wide">
+                      Down Payment Split
+                    </h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between py-1">
+                        <span className="text-gray-600">Customer Down Payment</span>
+                        <span className="font-semibold text-gray-900">{formatCurrency(calculation.downPayment)}</span>
+                      </div>
+                      <div className="flex justify-between py-1">
+                        <span className="text-gray-600">Dealer Share (75%)</span>
+                        <span className="font-semibold text-green-600">{formatCurrency(calculation.downPaymentDealerShare)}</span>
+                      </div>
+                      <div className="flex justify-between py-1">
+                        <span className="text-gray-600">Car World Share (25%)</span>
+                        <span className="font-semibold text-blue-600">{formatCurrency(calculation.downPaymentCarWorldShare)}</span>
+                      </div>
+                    </div>
                   </div>
                 )}
 
-                {/* Primary Payment Info */}
-                <div className="bg-blue-900 text-white rounded-lg p-6">
-                  <div className="text-center mb-2">
-                    <span className="inline-block bg-blue-700 text-blue-100 text-xs font-medium px-3 py-1 rounded-full">
-                      {calculation.paymentFrequencyLabel} Payments
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-blue-200 text-sm">Base Payment</p>
-                      <p className="text-3xl font-bold">
-                        {formatCurrency(calculation.basePayment)}
-                      </p>
+                {/* Lender Metrics */}
+                <details className="bg-white rounded-lg shadow-md">
+                  <summary className="p-5 cursor-pointer text-sm font-semibold text-gray-600 uppercase tracking-wide hover:bg-gray-50 rounded-lg">
+                    Lender Metrics
+                  </summary>
+                  <div className="px-5 pb-5 space-y-2 text-sm border-t">
+                    <div className="flex justify-between py-2">
+                      <span className="text-gray-600">ACV Recovery (50%)</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.acvRecovery)}</span>
                     </div>
-                    <div>
-                      <p className="text-blue-200 text-sm">Total Payment</p>
-                      <p className="text-3xl font-bold">
-                        {formatCurrency(calculation.totalPayment)}
-                      </p>
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-600">Investor Payment</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.investorPayment)}</span>
                     </div>
-                  </div>
-                  <div className="mt-4 pt-4 border-t border-blue-700">
-                    <p className="text-blue-200 text-sm">Due at Signing</p>
-                    <p className="text-2xl font-semibold">
-                      {formatCurrency(calculation.amountDueAtSigning)}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Calculation Details */}
-                <div className="space-y-3">
-                  <h3 className="font-medium text-gray-700 border-b pb-2">Deal Structure</h3>
-
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    <div className="text-gray-600">Agreed Price</div>
-                    <div className="text-right font-medium text-gray-900">
-                      {formatCurrency(calculation.agreedPrice)}
+                    <div className="flex justify-between py-2 bg-gray-50 -mx-5 px-5 rounded-b-lg">
+                      <span className="text-gray-700 font-medium">SPREAD (per payment)</span>
+                      <span className={`font-bold text-lg ${calculation.monthlySpreadEquivalent >= MIN_SPREAD ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatCurrency(calculation.spread)}
+                      </span>
                     </div>
-
-                    <div className="text-gray-600">Residual Value (15%)</div>
-                    <div className="text-right font-medium text-gray-900">
-                      {formatCurrency(calculation.residualValue)}
-                    </div>
-
-                    <div className="text-gray-600">Depreciation</div>
-                    <div className="text-right font-medium text-gray-900">
-                      {formatCurrency(calculation.depreciation)}
-                    </div>
-
-                    <div className="text-gray-600">Rent Charge</div>
-                    <div className="text-right font-medium text-gray-900">
-                      {formatCurrency(calculation.rentCharge)}
+                    <div className="flex justify-between py-1 text-xs text-gray-500">
+                      <span>Monthly Equivalent Spread</span>
+                      <span>{formatCurrency(calculation.monthlySpreadEquivalent)}</span>
                     </div>
                   </div>
-                </div>
-
-                <div className="space-y-3">
-                  <h3 className="font-medium text-gray-700 border-b pb-2">Payment Details</h3>
-
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    <div className="text-gray-600">Payment Frequency</div>
-                    <div className="text-right font-medium text-gray-900">
-                      {calculation.paymentFrequencyLabel}
-                    </div>
-
-                    <div className="text-gray-600">Number of Payments</div>
-                    <div className="text-right font-medium text-gray-900">
-                      {calculation.numberOfPayments}
-                    </div>
-
-                    <div className="text-gray-600">Tax per Payment</div>
-                    <div className="text-right font-medium text-gray-900">
-                      {formatCurrency(calculation.taxPerPayment)}
-                    </div>
-
-                    <div className="text-gray-600">Total of Payments</div>
-                    <div className="text-right font-medium text-gray-900">
-                      {formatCurrency(calculation.totalOfPayments)}
-                    </div>
-
-                    <div className="text-gray-600">Total Sales Tax</div>
-                    <div className="text-right font-medium text-gray-900">
-                      {formatCurrency(calculation.salesTax)}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <h3 className="font-medium text-gray-700 border-b pb-2">Profitability</h3>
-
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    <div className="text-gray-600">Investor Payment</div>
-                    <div className="text-right font-medium text-gray-900">
-                      {formatCurrency(calculation.investorPayment)}
-                    </div>
-
-                    <div className="text-gray-600">Spread (per payment)</div>
-                    <div className="text-right font-medium text-gray-900">
-                      {formatCurrency(calculation.spread)}
-                    </div>
-
-                    <div className="text-gray-600">Monthly Equiv. Spread</div>
-                    <div
-                      className={`text-right font-bold ${
-                        calculation.monthlySpreadEquivalent >= MIN_SPREAD ? 'text-green-600' : 'text-red-600'
-                      }`}
-                    >
-                      {formatCurrency(calculation.monthlySpreadEquivalent)}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Monthly Equivalent Info */}
-                <div className="bg-gray-50 rounded-lg p-4 text-sm">
-                  <p className="text-gray-600">
-                    <span className="font-medium">Monthly Equivalent Payment:</span>{' '}
-                    {formatCurrency(calculation.basePaymentMonthlyEquivalent)}
-                  </p>
-                  <p className="text-gray-500 text-xs mt-1">
-                    Validation is based on monthly equivalents to ensure deal profitability
-                  </p>
-                </div>
-              </div>
+                </details>
+              </>
             )}
           </div>
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="bg-gray-100 border-t mt-12 py-6">
-        <div className="max-w-6xl mx-auto px-4 text-center text-sm text-gray-500">
+      <footer className="bg-gray-100 border-t mt-8 py-4">
+        <div className="max-w-6xl mx-auto px-4 text-center text-xs text-gray-500">
           Car World Dealer Partner Portal &copy; {new Date().getFullYear()}
         </div>
       </footer>

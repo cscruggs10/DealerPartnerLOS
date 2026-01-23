@@ -23,12 +23,20 @@ export const PAYMENT_FREQUENCIES = {
 
 export type PaymentFrequency = keyof typeof PAYMENT_FREQUENCIES;
 
-// Minimum payment allowed (adjusted by frequency)
-// $300/month equivalent
-export const MIN_MONTHLY_PAYMENT_EQUIVALENT = 300;
+// Spread targets
+export const TARGET_SPREAD = 175;  // Target monthly spread
+export const MIN_SPREAD = 150;     // Minimum acceptable monthly spread
 
-// Minimum spread (profit margin) required per month
-export const MIN_SPREAD = 150;
+// Markup limits
+export const MAX_MARKUP = 5000;    // Maximum markup (agreed price - ACV)
+
+// Minimum base payment (monthly equivalent)
+export const MIN_BASE_PAYMENT = 300;
+export const MIN_MONTHLY_PAYMENT_EQUIVALENT = 300; // Alias for backward compatibility
+
+// Down payment split percentages
+export const DOWN_PAYMENT_DEALER_PERCENT = 0.75;   // 75% to dealer
+export const DOWN_PAYMENT_CARWORLD_PERCENT = 0.25; // 25% to Car World
 
 // State tax rates
 export const TAX_RATES: Record<string, number> = {
@@ -42,3 +50,7 @@ export type SupportedState = keyof typeof TAX_RATES;
 // Valid lease terms in months
 export const VALID_TERMS = [12, 24, 36, 48, 60, 72] as const;
 export type LeaseTerm = typeof VALID_TERMS[number];
+
+// Maximum term for auto-calculation
+export const MAX_TERM_MONTHS = 48;
+export const MIN_TERM_MONTHS = 1;
