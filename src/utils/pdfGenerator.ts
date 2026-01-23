@@ -510,40 +510,433 @@ export function generateLeasePDF(contractData: ContractData): void {
   doc.text('when you return the Vehicle at the end of the scheduled Lease', margin + 265, y);
   y += 10;
   doc.text('Term. This Fee will not apply if the Lease ends early or if you buy the Vehicle at the end of the Lease Term.', margin, y);
+  y += 25;
+
+  // ========== VOLUNTARY PROTECTION PRODUCTS ==========
+  addNewPageIfNeeded(250);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Voluntary Protection Products', margin, y);
+  y += 15;
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  const voluntaryText = 'Any of the following voluntary protection policies are available for purchase. They are not a required condition of this Lease and will not impact our choice to let you lease the vehicle. By signing below, you confirm that you have read and received a copy of the contract(s) for the product(s) and that you wish to purchase the item as described. You have rejected any coverage we offered if there is no coverage or fee for an item.';
+  const voluntaryLines = doc.splitTextToSize(voluntaryText, contentWidth);
+  doc.text(voluntaryLines, margin, y);
+  y += voluntaryLines.length * 10 + 15;
+
+  // Protection Products Table
+  autoTable(doc, {
+    startY: y,
+    head: [['Product', 'Price', 'Term', 'Coverage']],
+    body: [
+      ['Service Contract', '$ ___________', '___________', '_'.repeat(40)],
+      ['Gap Coverage or Gap Waiver', '$ ___________', '___________', '_'.repeat(40)],
+      ['Mechanical Breakdown Protection (MBP)', '$ ___________', '___________', '_'.repeat(40)],
+      ['Extended Warranty', '$ ___________', '___________', '_'.repeat(40)],
+    ],
+    theme: 'grid',
+    headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9 },
+    styles: { fontSize: 9 },
+    columnStyles: {
+      0: { cellWidth: 160 },
+      1: { cellWidth: 80 },
+      2: { cellWidth: 70 },
+      3: { cellWidth: contentWidth - 310 },
+    },
+    margin: { left: margin, right: margin },
+  });
+  y = (doc as any).lastAutoTable.finalY + 15;
+
+  // Voluntary Products Signatures
+  doc.setFontSize(9);
+  doc.text('Lessee Name: ___________________________ Date: ___________', margin, y);
+  y += 15;
+  doc.text('Co-Lessee Name: ___________________________ Date: ___________', margin, y);
+  y += 15;
+  doc.text('Lessor Name: ___________________________ Date: ___________', margin, y);
   y += 20;
 
-  // ========== SIGNATURES (First Set) ==========
+  // Security Deposit Service Fee
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Service Fee for Unclaimed Refunds of Security Deposits.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  y += 10;
+  const securityText = 'If we send you a check to refund the remaining portion of any Security Deposit after this Lease ends and you fail to collect it within six months, you acknowledge that we have the right to deduct a monthly service charge from the remaining portion of the Security Deposit until it is fully refunded to you or depleted.';
+  const securityLines = doc.splitTextToSize(securityText, contentWidth);
+  doc.text(securityLines, margin, y);
+  y += securityLines.length * 10 + 20;
+
+  // ========== WARRANTIES ==========
+  addNewPageIfNeeded(150);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Warranties', margin, y);
+  y += 15;
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  const warrantyText1 = 'Warranties. The Vehicle is covered by the express warranties that are applicable to this Lease.';
+  doc.text(warrantyText1, margin, y);
+  y += 15;
+
+  const warrantyText2 = 'The warranty provided by the manufacturer. This warranty is provided by the manufacturer and is NOT the responsibility of the Lessor.';
+  const warrantyLines2 = doc.splitTextToSize(warrantyText2, contentWidth);
+  doc.text(warrantyLines2, margin, y);
+  y += warrantyLines2.length * 10 + 10;
+
+  const warrantyText3 = 'By signing this Lease, you confirm that you have received a copy of the written warranties mentioned above. We want to clarify that we (the Lessor) do not provide any explicit or implicit guarantees beyond what has been mentioned earlier (if applicable). Unless legally mandated, the Lessor does not provide any implied warranty of merchantability or any warranty regarding the suitability of the Vehicle for a specific purpose. With the exception of what has been mentioned previously, you will accept the Vehicle in its current condition, AS IS, including WITH ANY AND ALL FAULTS.';
+  const warrantyLines3 = doc.splitTextToSize(warrantyText3, contentWidth);
+  doc.text(warrantyLines3, margin, y);
+  y += warrantyLines3.length * 10 + 25;
+
+  // ========== ADDITIONAL LEASE TERMS ==========
+  addNewPageIfNeeded(100);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Additional Lease Terms', pageWidth / 2, y, { align: 'center' });
+  y += 25;
+
+  // Definitions
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Definitions.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const defText = 'Each person or legal entity that signs this Lease as the "Lessee" individually and collectively is referred to as "you," "your," and "Lessee." The Lessor who signs this Lease, as well as any successors and assigns, are referred to as "we," "our," "us," and "Lessor."';
+  const defLines = doc.splitTextToSize(defText, contentWidth);
+  doc.text(defLines, margin, y);
+  y += defLines.length * 10 + 15;
+
+  // Lease Agreement
+  addNewPageIfNeeded(120);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Lease Agreement.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const leaseAgreeText = 'You accept that we will lease you the automobile (referred to as the "Vehicle") for the duration of this Lease. You promise to fulfil your end of the Lease and to pay any owed sums. Except in the event the "Business, commercial, or agricultural purpose" box is checked in the Lease, this Lease is considered to be a personal, family, or household purpose transaction.';
+  const leaseAgreeLines = doc.splitTextToSize(leaseAgreeText, contentWidth);
+  doc.text(leaseAgreeLines, margin, y);
+  y += leaseAgreeLines.length * 10 + 15;
+
+  // Payments
   addNewPageIfNeeded(100);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text('Signatures', margin, y);
+  doc.text('Payments.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const paymentText = 'You agree to pay us the amounts stated in the Federal Consumer Disclosures. The payment amounts stated are based on the payment frequency you selected. If you have not paid at least fifteen (15) days before this Lease ends, we may limit your option to buy the Vehicle, extend this Lease, or lease another vehicle.';
+  const paymentLines = doc.splitTextToSize(paymentText, contentWidth);
+  doc.text(paymentLines, margin, y);
+  y += paymentLines.length * 10 + 15;
+
+  // Late Charges
+  addNewPageIfNeeded(80);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Late Charges.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const lateText = 'If a payment is not received within ten (10) days of the scheduled due date, you agree to pay us a late charge of $25.00 or 5% of the payment amount, whichever is greater. You agree that the late charge is reasonable and represents a fair estimate of our costs for processing late payments.';
+  const lateLines = doc.splitTextToSize(lateText, contentWidth);
+  doc.text(lateLines, margin, y);
+  y += lateLines.length * 10 + 15;
+
+  // Returned Payment Fee
+  addNewPageIfNeeded(80);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Returned Payment Fee.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const returnedText = 'If any payment you make to us is returned unpaid for any reason, you agree to pay us a returned payment fee of $30.00 in addition to any late charges that may apply.';
+  const returnedLines = doc.splitTextToSize(returnedText, contentWidth);
+  doc.text(returnedLines, margin, y);
+  y += returnedLines.length * 10 + 15;
+
+  // Security Deposit
+  addNewPageIfNeeded(100);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Security Deposit.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const secDepText = 'If a Security Deposit is required and stated in this Lease, you agree to pay us that amount. The Security Deposit may be used by us to cover any amounts you owe us under this Lease. If you fulfill all of your obligations under this Lease, we will refund the Security Deposit to you, without interest, within 30 days after the end of the Lease.';
+  const secDepLines = doc.splitTextToSize(secDepText, contentWidth);
+  doc.text(secDepLines, margin, y);
+  y += secDepLines.length * 10 + 15;
+
+  // Use of Vehicle
+  addNewPageIfNeeded(120);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Use of Vehicle.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const useText = 'You agree to use the Vehicle only for personal, family, or household purposes unless the "Business, commercial, or agricultural purpose" box is checked in the Lease. You will not use the Vehicle for any illegal purpose, for hire, in races or speed contests, or allow anyone to operate the Vehicle who does not have a valid driver\'s license. You will not remove the Vehicle from the United States without our prior written consent.';
+  const useLines = doc.splitTextToSize(useText, contentWidth);
+  doc.text(useLines, margin, y);
+  y += useLines.length * 10 + 15;
+
+  // Maintenance and Repairs
+  addNewPageIfNeeded(120);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Maintenance and Repairs.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const maintText = 'You agree to properly maintain the Vehicle according to the manufacturer\'s recommendations and keep it in good working order. You are responsible for all repairs and maintenance during the Lease term, including but not limited to oil changes, tire rotations, brake service, and any other mechanical repairs. You must keep all maintenance records and provide them to us upon request.';
+  const maintLines = doc.splitTextToSize(maintText, contentWidth);
+  doc.text(maintLines, margin, y);
+  y += maintLines.length * 10 + 15;
+
+  // Insurance Requirements
+  addNewPageIfNeeded(150);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Insurance Requirements.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const insText = 'You agree to maintain at your expense the following insurance coverage throughout the Lease term: (a) comprehensive and collision coverage with a maximum deductible of $500; (b) liability coverage with minimum limits of $100,000 per person, $300,000 per occurrence for bodily injury, and $50,000 for property damage; and (c) any other coverage required by law. The insurance policy must name us as loss payee and additional insured. You must provide us with proof of insurance upon request. If you fail to maintain required insurance, we may obtain insurance on the Vehicle and charge you the cost.';
+  const insLines = doc.splitTextToSize(insText, contentWidth);
+  doc.text(insLines, margin, y);
+  y += insLines.length * 10 + 15;
+
+  // Title and Registration
+  addNewPageIfNeeded(100);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Title and Registration.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const titleText = 'We will hold title to the Vehicle during the Lease term. You agree to pay all registration fees, license fees, and taxes related to the Vehicle. You will not attempt to transfer, sell, assign, or encumber the Vehicle or this Lease without our prior written consent.';
+  const titleLines = doc.splitTextToSize(titleText, contentWidth);
+  doc.text(titleLines, margin, y);
+  y += titleLines.length * 10 + 15;
+
+  // Loss or Damage
+  addNewPageIfNeeded(150);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Loss or Damage to Vehicle.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const lossText = 'If the Vehicle is damaged, lost, or destroyed, you must immediately notify us and your insurance company. You are responsible for any loss or damage to the Vehicle, regardless of cause, except for normal wear and use. If the Vehicle is determined to be a total loss, you will be liable for any difference between the insurance proceeds and the amount you owe under this Lease, unless Gap Coverage applies.';
+  const lossLines = doc.splitTextToSize(lossText, contentWidth);
+  doc.text(lossLines, margin, y);
+  y += lossLines.length * 10 + 15;
+
+  // Default
+  addNewPageIfNeeded(180);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Default.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const defaultText = 'You will be in default under this Lease if: (a) you fail to make any payment when due; (b) you fail to maintain required insurance; (c) you breach any other term of this Lease; (d) you become insolvent or file for bankruptcy; (e) you provide false information in connection with this Lease; or (f) you abandon the Vehicle. Upon default, we may, to the extent permitted by law: (1) terminate this Lease; (2) require you to return the Vehicle immediately; (3) repossess the Vehicle without notice; (4) require you to pay all amounts due under this Lease, including early termination charges; and (5) exercise any other rights available to us under law.';
+  const defaultLines = doc.splitTextToSize(defaultText, contentWidth);
+  doc.text(defaultLines, margin, y);
+  y += defaultLines.length * 10 + 15;
+
+  // Early Termination
+  addNewPageIfNeeded(180);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Early Termination.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const earlyText = 'You may terminate this Lease early by returning the Vehicle and paying the Early Termination Amount. The Early Termination Amount equals: (a) all unpaid amounts due under this Lease; plus (b) the remaining depreciation and rent charges; plus (c) any applicable fees and charges; minus (d) the wholesale value of the Vehicle at termination. You understand that early termination may result in a substantial charge, and the earlier you terminate, the greater the charge may be.';
+  const earlyLines = doc.splitTextToSize(earlyText, contentWidth);
+  doc.text(earlyLines, margin, y);
+  y += earlyLines.length * 10 + 15;
+
+  // End of Lease Options
+  addNewPageIfNeeded(150);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('End of Lease Options.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const endText = 'At the scheduled end of this Lease, you may: (a) return the Vehicle to us in accordance with the return requirements; (b) purchase the Vehicle for the Purchase Option Price stated in this Lease plus any applicable fees and taxes; or (c) if we agree, extend this Lease under terms we determine. You must notify us of your choice at least 30 days before the end of the Lease.';
+  const endLines = doc.splitTextToSize(endText, contentWidth);
+  doc.text(endLines, margin, y);
+  y += endLines.length * 10 + 15;
+
+  // Vehicle Return Requirements
+  addNewPageIfNeeded(150);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Vehicle Return Requirements.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const returnReqText = 'When you return the Vehicle, it must be in good operating condition, with all equipment and accessories originally included. The Vehicle will be inspected for excess wear and use. You will be charged for: (a) mileage in excess of the limit stated in this Lease at the rate specified; (b) excess wear and damage beyond normal use; (c) missing equipment or accessories; and (d) any repairs needed to return the Vehicle to good operating condition.';
+  const returnReqLines = doc.splitTextToSize(returnReqText, contentWidth);
+  doc.text(returnReqLines, margin, y);
+  y += returnReqLines.length * 10 + 15;
+
+  // Excess Wear Standards
+  addNewPageIfNeeded(180);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Excess Wear and Use Standards.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const excessText = 'Excess wear and use includes but is not limited to: dents, scratches, or chips larger than normal minor road damage; tears, burns, or stains in the interior; cracked or broken glass; mechanical damage from misuse or lack of maintenance; tire wear beyond acceptable limits; and any modifications made without our consent. The cost to repair or replace items will be determined based on reasonable market rates.';
+  const excessLines = doc.splitTextToSize(excessText, contentWidth);
+  doc.text(excessLines, margin, y);
+  y += excessLines.length * 10 + 15;
+
+  // Indemnification
+  addNewPageIfNeeded(120);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Indemnification.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const indemnText = 'You agree to indemnify, defend, and hold us harmless from any and all claims, losses, damages, liabilities, costs, and expenses (including reasonable attorney fees) arising from your use, operation, or possession of the Vehicle, except to the extent caused by our gross negligence or willful misconduct.';
+  const indemnLines = doc.splitTextToSize(indemnText, contentWidth);
+  doc.text(indemnLines, margin, y);
+  y += indemnLines.length * 10 + 15;
+
+  // Assignment
+  addNewPageIfNeeded(100);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Assignment.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const assignText = 'We may assign this Lease and our rights under it without your consent. If we do, the assignee will have all of our rights but none of our obligations. You may not assign this Lease or your rights or obligations under it without our prior written consent.';
+  const assignLines = doc.splitTextToSize(assignText, contentWidth);
+  doc.text(assignLines, margin, y);
+  y += assignLines.length * 10 + 15;
+
+  // Governing Law
+  addNewPageIfNeeded(100);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Governing Law.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const govText = `This Lease will be governed by and construed in accordance with the laws of the State of ${calculation.state}, without regard to its conflict of laws principles. Any legal action arising from this Lease must be brought in the courts of the State of ${calculation.state}.`;
+  const govLines = doc.splitTextToSize(govText, contentWidth);
+  doc.text(govLines, margin, y);
+  y += govLines.length * 10 + 15;
+
+  // Entire Agreement
+  addNewPageIfNeeded(100);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Entire Agreement.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const entireText = 'This Lease, including any addenda and attachments, constitutes the entire agreement between you and us regarding the lease of the Vehicle. No modification of this Lease will be effective unless in writing and signed by both parties.';
+  const entireLines = doc.splitTextToSize(entireText, contentWidth);
+  doc.text(entireLines, margin, y);
+  y += entireLines.length * 10 + 15;
+
+  // Severability
+  addNewPageIfNeeded(80);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Severability.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const severText = 'If any provision of this Lease is found to be invalid or unenforceable, the remaining provisions will continue in full force and effect.';
+  const severLines = doc.splitTextToSize(severText, contentWidth);
+  doc.text(severLines, margin, y);
+  y += severLines.length * 10 + 15;
+
+  // Waiver
+  addNewPageIfNeeded(80);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Waiver.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const waiverText = 'Our failure to enforce any right or provision of this Lease will not constitute a waiver of such right or provision. Any waiver must be in writing and signed by us to be effective.';
+  const waiverLines = doc.splitTextToSize(waiverText, contentWidth);
+  doc.text(waiverLines, margin, y);
+  y += waiverLines.length * 10 + 15;
+
+  // Notices
+  addNewPageIfNeeded(100);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Notices.', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  y += 12;
+  const noticesText = 'Any notice required or permitted under this Lease must be in writing and will be deemed given when delivered personally, sent by certified mail, or sent by overnight courier to the address shown in this Lease. You agree to notify us promptly of any change in your address.';
+  const noticesLines = doc.splitTextToSize(noticesText, contentWidth);
+  doc.text(noticesLines, margin, y);
+  y += noticesLines.length * 10 + 20;
+
+  // ========== ARBITRATION AGREEMENT ==========
+  addNewPageIfNeeded(300);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('ARBITRATION AGREEMENT', pageWidth / 2, y, { align: 'center' });
   y += 20;
 
-  doc.setFontSize(9);
-  doc.text('_'.repeat(50), margin, y);
-  doc.text('_'.repeat(25), margin + 320, y);
-  y += 12;
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PLEASE READ THIS ARBITRATION AGREEMENT CAREFULLY. IT AFFECTS YOUR LEGAL RIGHTS.', margin, y);
+  y += 15;
+
   doc.setFont('helvetica', 'normal');
-  doc.text('Lessee Signature', margin, y);
-  doc.text('Date', margin + 320, y);
-  y += 25;
+  const arbText1 = 'Agreement to Arbitrate. You and we agree that any claim, dispute, or controversy between you and us arising from or relating to this Lease, the Vehicle, or any related transaction, whether based in contract, tort, statute, fraud, misrepresentation, or any other legal theory, will be resolved by binding arbitration administered by the American Arbitration Association ("AAA") under its Consumer Arbitration Rules.';
+  const arbLines1 = doc.splitTextToSize(arbText1, contentWidth);
+  doc.text(arbLines1, margin, y);
+  y += arbLines1.length * 10 + 10;
 
-  doc.text('_'.repeat(50), margin, y);
-  doc.text('_'.repeat(25), margin + 320, y);
-  y += 12;
-  doc.text('Co-Lessee Signature', margin, y);
-  doc.text('Date', margin + 320, y);
-  y += 25;
+  const arbText2 = 'Class Action Waiver. YOU AND WE AGREE THAT EACH MAY BRING CLAIMS AGAINST THE OTHER ONLY IN YOUR OR OUR INDIVIDUAL CAPACITY, AND NOT AS A PLAINTIFF OR CLASS MEMBER IN ANY PURPORTED CLASS OR REPRESENTATIVE PROCEEDING. The arbitrator may not consolidate more than one person\'s claims and may not preside over any form of representative or class proceeding.';
+  const arbLines2 = doc.splitTextToSize(arbText2, contentWidth);
+  doc.text(arbLines2, margin, y);
+  y += arbLines2.length * 10 + 10;
 
-  doc.text('_'.repeat(50), margin, y);
-  doc.text('_'.repeat(25), margin + 320, y);
-  y += 12;
-  doc.text('Lessor Signature', margin, y);
-  doc.text('Date', margin + 320, y);
-  y += 30;
+  const arbText3 = 'Arbitration Procedures. The arbitration will be conducted in the county where you reside or at another mutually agreed location. The arbitrator will apply applicable substantive law and the provisions of this Lease. The arbitrator\'s decision will be final and binding, and judgment may be entered in any court of competent jurisdiction.';
+  const arbLines3 = doc.splitTextToSize(arbText3, contentWidth);
+  doc.text(arbLines3, margin, y);
+  y += arbLines3.length * 10 + 10;
+
+  const arbText4 = 'Costs of Arbitration. We will pay all AAA filing, administration, and arbitrator fees for claims of $10,000 or less. For claims over $10,000, filing and arbitration fees will be shared equally. Each party will bear its own attorney fees unless the arbitrator determines that a claim was frivolous.';
+  const arbLines4 = doc.splitTextToSize(arbText4, contentWidth);
+  doc.text(arbLines4, margin, y);
+  y += arbLines4.length * 10 + 10;
+
+  const arbText5 = 'Right to Opt Out. You have the right to opt out of this Arbitration Agreement by sending written notice of your decision to opt out to us within 30 days of signing this Lease. If you opt out, you may still pursue claims in court.';
+  const arbLines5 = doc.splitTextToSize(arbText5, contentWidth);
+  doc.text(arbLines5, margin, y);
+  y += arbLines5.length * 10 + 20;
 
   // ========== NOTICE ==========
-  addNewPageIfNeeded(80);
+  addNewPageIfNeeded(120);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.text('NOTICE:', margin, y);
@@ -555,14 +948,62 @@ export function generateLeasePDF(contractData: ContractData): void {
   const noticeText = 'THIS DOCUMENT CONSTITUTES A LEGALLY BINDING LEASE AGREEMENT. THIS DOCUMENT IS NOT INTENDED TO BE A PURCHASE AGREEMENT. PLEASE CAREFULLY REVIEW THESE MATTERS AND CONSIDER SEEKING INDEPENDENT PROFESSIONAL ADVICE IF YOU HAVE ANY QUESTIONS REGARDING THIS TRANSACTION. YOU HAVE THE RIGHT TO RECEIVE AN EXACT COPY OF THE AGREEMENT YOU SIGN.';
   const noticeLines = doc.splitTextToSize(noticeText, contentWidth);
   doc.text(noticeLines, margin, y);
-  y += noticeLines.length * 10 + 15;
+  y += noticeLines.length * 10 + 20;
 
+  // ========== FINAL SIGNATURES ==========
+  addNewPageIfNeeded(200);
+  doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.text('Arbitration.', margin, y);
+  doc.text('Signatures', margin, y);
+  y += 5;
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  doc.text('This Lease contains an Arbitration Agreement that affects your rights. By signing this Lease, you are acknowledging', margin + 55, y);
-  y += 10;
-  doc.text('and accepting the terms of the Arbitration Agreement.', margin, y);
+  doc.text('By signing below, you acknowledge that you have read, understand, and agree to all terms of this Lease Agreement, including the Arbitration Agreement.', margin, y);
+  y += 25;
+
+  doc.setFontSize(9);
+  doc.text('_'.repeat(50), margin, y);
+  doc.text('_'.repeat(25), margin + 320, y);
+  y += 12;
+  doc.setFont('helvetica', 'normal');
+  doc.text('Lessee Signature', margin, y);
+  doc.text('Date', margin + 320, y);
+  y += 12;
+  if (customer.lesseeName) {
+    doc.text(`Print Name: ${customer.lesseeName}`, margin, y);
+  } else {
+    doc.text('Print Name: _________________________________', margin, y);
+  }
+  y += 25;
+
+  doc.text('_'.repeat(50), margin, y);
+  doc.text('_'.repeat(25), margin + 320, y);
+  y += 12;
+  doc.text('Co-Lessee Signature', margin, y);
+  doc.text('Date', margin + 320, y);
+  y += 12;
+  if (customer.coLesseeName) {
+    doc.text(`Print Name: ${customer.coLesseeName}`, margin, y);
+  } else {
+    doc.text('Print Name: _________________________________', margin, y);
+  }
+  y += 25;
+
+  doc.text('_'.repeat(50), margin, y);
+  doc.text('_'.repeat(25), margin + 320, y);
+  y += 12;
+  doc.text('Lessor Signature', margin, y);
+  doc.text('Date', margin + 320, y);
+  y += 12;
+  doc.text('Print Name: _________________________________', margin, y);
+  y += 30;
+
+  // Acknowledgment
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'italic');
+  doc.text('I/We acknowledge receipt of a completed copy of this Lease Agreement.', margin, y);
+  y += 15;
+  doc.text('Lessee Initials: _______     Co-Lessee Initials: _______     Date: _______________', margin, y);
 
   // Save the document
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
