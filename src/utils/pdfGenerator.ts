@@ -33,7 +33,10 @@ function formatAddress(address: string, city: string, state: string, zip: string
 // ============================================================================
 
 export function generateLeasePDF(contractData: ContractData): void {
-  const { calculation, vehicle, customer, firstPaymentDate } = contractData;
+  const { calculation, vehicle, customer, firstPaymentDate: firstPaymentDateInput } = contractData;
+
+  // Ensure first payment date has a value (fallback to blank line if not provided)
+  const firstPaymentDate = firstPaymentDateInput || '_____________';
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'pt',
