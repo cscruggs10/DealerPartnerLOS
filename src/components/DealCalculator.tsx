@@ -905,19 +905,101 @@ export function DealCalculator() {
                   </div>
                 </div>
 
-                {/* Deal Structure */}
+                {/* Deal Structure - Standard Lease Display */}
                 <div className="bg-white rounded-lg shadow-md p-5">
                   <h3 className="text-sm font-semibold text-gray-600 mb-3 uppercase tracking-wide">
                     Deal Structure
                   </h3>
                   <div className="space-y-2 text-sm">
+                    {/* Capitalized Cost Breakdown */}
                     <div className="flex justify-between py-1">
                       <span className="text-gray-600">Agreed Price</span>
                       <span className="font-semibold text-gray-900">{formatCurrency(calculation.agreedPrice)}</span>
                     </div>
                     <div className="flex justify-between py-1">
+                      <span className="text-gray-600">+ Doc Fee</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.docFee)}</span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-600">+ Sales Tax</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.salesTaxOnPrice)}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-t pt-2">
+                      <span className="text-gray-700 font-medium">= Gross Cap Cost</span>
+                      <span className="font-bold text-gray-900">{formatCurrency(calculation.grossCapCost)}</span>
+                    </div>
+                    {calculation.capCostReduction > 0 && (
+                      <div className="flex justify-between py-1">
+                        <span className="text-gray-600">− Cap Cost Reduction</span>
+                        <span className="font-semibold text-gray-900">-{formatCurrency(calculation.capCostReduction)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between py-1 border-t pt-2">
+                      <span className="text-gray-700 font-medium">= Adjusted Cap Cost</span>
+                      <span className="font-bold text-gray-900">{formatCurrency(calculation.adjustedCapCost)}</span>
+                    </div>
+
+                    {/* Lease Calculation */}
+                    <div className="flex justify-between py-1 mt-3 border-t pt-3">
                       <span className="text-gray-600">Residual Value (15%)</span>
                       <span className="font-semibold text-gray-900">{formatCurrency(calculation.residualValue)}</span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-600">Depreciation</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.depreciation)}</span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-600">Rent Charge</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.rentCharge)}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-t pt-2">
+                      <span className="text-gray-700 font-medium">Total of Base Payments</span>
+                      <span className="font-bold text-gray-900">{formatCurrency(calculation.totalOfBasePayments)}</span>
+                    </div>
+
+                    {/* Amount Due */}
+                    <div className="flex justify-between py-2 bg-gray-50 -mx-5 px-5 mt-3">
+                      <span className="text-gray-700 font-medium">Due at Signing</span>
+                      <span className="font-bold text-gray-900">{formatCurrency(calculation.amountDueAtSigning)}</span>
+                    </div>
+                    <div className="flex justify-between py-1 text-xs text-gray-500 -mx-5 px-5">
+                      <span>(Down Payment + First Payment + Doc Fee)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cap Cost Reduction Breakdown */}
+                {calculation.capCostReduction > 0 && (
+                  <div className="bg-white rounded-lg shadow-md p-5">
+                    <h3 className="text-sm font-semibold text-gray-600 mb-3 uppercase tracking-wide">
+                      Cap Cost Reduction Split
+                    </h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between py-1 border-b pb-2">
+                        <span className="text-gray-700 font-medium">Down Payment (Cap Cost Reduction)</span>
+                        <span className="font-bold text-gray-900">{formatCurrency(calculation.capCostReduction)}</span>
+                      </div>
+                      <div className="flex justify-between py-1">
+                        <span className="text-gray-600">Dealer Share (75%)</span>
+                        <span className="font-semibold text-green-600">{formatCurrency(calculation.downPaymentDealerShare)}</span>
+                      </div>
+                      <div className="flex justify-between py-1">
+                        <span className="text-gray-600">Car World Share (25%)</span>
+                        <span className="font-semibold text-blue-600">{formatCurrency(calculation.downPaymentCarWorldShare)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Lender Metrics (collapsible) */}
+                <details className="bg-white rounded-lg shadow-md">
+                  <summary className="p-5 cursor-pointer text-sm font-semibold text-gray-600 uppercase tracking-wide hover:bg-gray-50 rounded-lg">
+                    Lender Metrics
+                  </summary>
+                  <div className="px-5 pb-5 space-y-2 text-sm border-t">
+                    <div className="flex justify-between py-2">
+                      <span className="text-gray-600">ACV (Internal Cost)</span>
+                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.acv)}</span>
                     </div>
                     <div className="flex justify-between py-1 items-center">
                       <span className="text-gray-600 flex items-center gap-1">
@@ -931,62 +1013,6 @@ export function DealCalculator() {
                       <span className={`font-semibold ${calculation.markup > MAX_MARKUP ? 'text-red-600' : 'text-gray-900'}`}>
                         {formatCurrency(calculation.markup)}
                       </span>
-                    </div>
-                    <div className="flex justify-between py-1 border-t pt-2">
-                      <span className="text-gray-600">Total of Payments</span>
-                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.totalOfPayments)}</span>
-                    </div>
-                    <div className="flex justify-between py-1 bg-gray-50 -mx-5 px-5 mt-2">
-                      <span className="text-gray-700 font-medium">Due at Signing</span>
-                      <span className="font-bold text-gray-900">{formatCurrency(calculation.amountDueAtSigning)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Down Payment Breakdown */}
-                {calculation.downPayment > 0 && (
-                  <div className="bg-white rounded-lg shadow-md p-5">
-                    <h3 className="text-sm font-semibold text-gray-600 mb-3 uppercase tracking-wide">
-                      Customer Cash Breakdown
-                    </h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between py-1 border-b pb-2">
-                        <span className="text-gray-700 font-medium">Total Customer Cash</span>
-                        <span className="font-bold text-gray-900">{formatCurrency(calculation.downPayment)}</span>
-                      </div>
-                      <div className="flex justify-between py-1">
-                        <span className="text-gray-600">Doc Fee</span>
-                        <span className="font-semibold text-gray-900">-{formatCurrency(calculation.docFee)}</span>
-                      </div>
-                      <div className="flex justify-between py-1 border-t pt-2">
-                        <span className="text-gray-700 font-medium">Cap Cost Reduction</span>
-                        <span className="font-bold text-gray-900">{formatCurrency(calculation.capCostReduction)}</span>
-                      </div>
-                      {calculation.capCostReduction > 0 && (
-                        <>
-                          <div className="flex justify-between py-1 pl-4 text-xs">
-                            <span className="text-gray-500">Dealer Share (75%)</span>
-                            <span className="font-semibold text-green-600">{formatCurrency(calculation.downPaymentDealerShare)}</span>
-                          </div>
-                          <div className="flex justify-between py-1 pl-4 text-xs">
-                            <span className="text-gray-500">Car World Share (25%)</span>
-                            <span className="font-semibold text-blue-600">{formatCurrency(calculation.downPaymentCarWorldShare)}</span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Lender Metrics */}
-                <details className="bg-white rounded-lg shadow-md">
-                  <summary className="p-5 cursor-pointer text-sm font-semibold text-gray-600 uppercase tracking-wide hover:bg-gray-50 rounded-lg">
-                    Lender Metrics
-                  </summary>
-                  <div className="px-5 pb-5 space-y-2 text-sm border-t">
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-600">ACV Recovery (50%)</span>
-                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.acvRecovery)}</span>
                     </div>
                     <div className="flex justify-between py-1">
                       <span className="text-gray-600">Investor Payment</span>
