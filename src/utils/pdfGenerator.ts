@@ -114,13 +114,12 @@ export function generateLeasePDF(contractData: ContractData): void {
   // ========== PAYMENT SCHEDULE ROW ==========
   const isWeekly = calculation.paymentFrequency === 'weekly';
   const isBiweekly = calculation.paymentFrequency === 'biweekly';
-  const isSemimonthly = calculation.paymentFrequency === 'semimonthly';
   const isMonthly = calculation.paymentFrequency === 'monthly';
 
   doc.setFont('helvetica', 'bold');
   doc.text('Payment Schedule:', margin, y);
   doc.setFont('helvetica', 'normal');
-  doc.text(`${checkboxChar(isWeekly)} Weekly   ${checkboxChar(isBiweekly)} Bi-weekly   ${checkboxChar(isSemimonthly)} Semi-Monthly   ${checkboxChar(isMonthly)} Monthly`, margin + 95, y);
+  doc.text(`${checkboxChar(isWeekly)} Weekly   ${checkboxChar(isBiweekly)} Bi-weekly   ${checkboxChar(isMonthly)} Monthly`, margin + 95, y);
 
   // Contract date = today's date
   const today = new Date();

@@ -69,8 +69,6 @@ export function calculateFirstPaymentDate(
       return calculateWeeklyFirstPayment(today, payDayConfig.dayOfWeek ?? 5, 2);
     case 'biweekly':
       return calculateBiweeklyFirstPayment(today, payDayConfig.dayOfWeek ?? 5, 1);
-    case 'semimonthly':
-      return calculateSemiMonthlyFirstPayment(today, payDayConfig.semiMonthlyDays ?? [1, 15], 1);
     case 'monthly':
       return calculateMonthlyFirstPayment(today, payDayConfig.monthlyDay ?? 1, 30);
     default:
@@ -159,56 +157,6 @@ function calculateBiweeklyFirstPayment(
 }
 
 /**
- * Semi-monthly payment: Find next pay day from the two days per month
- */
-function calculateSemiMonthlyFirstPayment(
-  today: Date,
-  payDays: [number, number],
-  _maxSkip: number
-): FirstPaymentResult {
-  const [day1, day2] = payDays.sort((a, b) => a - b);
-  let skippedPayDays = 0;
-
-  // Find the next semi-monthly pay day
-  const currentDay = today.getDate();
-  const currentMonth = today.getMonth();
-  const currentYear = today.getFullYear();
-
-  let nextPayDay: Date;
-
-  if (currentDay < day1) {
-    nextPayDay = new Date(currentYear, currentMonth, day1);
-  } else if (currentDay < day2) {
-    nextPayDay = new Date(currentYear, currentMonth, day2);
-  } else {
-    // Move to next month's first pay day
-    nextPayDay = new Date(currentYear, currentMonth + 1, day1);
-  }
-
-  // Ensure at least 15 days out for semi-monthly
-  let daysUntil = Math.ceil((nextPayDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-  if (daysUntil < 15) {
-    // Skip to next pay day
-    if (nextPayDay.getDate() === day1) {
-      nextPayDay.setDate(day2);
-    } else {
-      nextPayDay.setMonth(nextPayDay.getMonth() + 1);
-      nextPayDay.setDate(day1);
-    }
-    skippedPayDays = 1;
-    daysUntil = Math.ceil((nextPayDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  }
-
-  return {
-    date: nextPayDay,
-    formattedDate: formatDate(nextPayDay),
-    daysUntil,
-    skippedPayDays,
-  };
-}
-
-/**
  * Monthly payment: Find next pay day, can't be more than maxDays out
  */
 function calculateMonthlyFirstPayment(
@@ -273,8 +221,6 @@ export function getPayDayInputLabel(frequency: PaymentFrequency): string {
     case 'weekly':
     case 'biweekly':
       return 'Customer Pay Day';
-    case 'semimonthly':
-      return 'Pay Schedule';
     case 'monthly':
       return 'Pay Day of Month';
     default:

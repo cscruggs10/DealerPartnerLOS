@@ -11,8 +11,8 @@ import {
   TAX_RATES,
   PAYMENT_FREQUENCIES,
   MIN_SPREAD,
-  MAX_MARKUP,
-  MAX_TERM_MONTHS,
+  MAX_TERM,
+  DOC_FEE,
   type SupportedState,
   type PaymentFrequency,
 } from '../utils/constants';
@@ -21,7 +21,6 @@ import { decodeVIN, type VehicleInfo } from '../utils/vinDecoder';
 import {
   calculateFirstPaymentDate,
   DAYS_OF_WEEK,
-  SEMI_MONTHLY_SCHEDULES,
   DAYS_OF_MONTH,
   type PayDayConfig,
   type FirstPaymentResult,
@@ -33,6 +32,7 @@ interface FormState {
   termMonths: string;
   docFee: string;
   downPayment: string;
+  paymentReduction: string;
   paymentFrequency: PaymentFrequency;
 }
 
@@ -75,7 +75,6 @@ const STATES: { value: SupportedState; label: string }[] = [
 const FREQUENCIES: { value: PaymentFrequency; label: string }[] = [
   { value: 'weekly', label: 'Weekly' },
   { value: 'biweekly', label: 'Bi-Weekly' },
-  { value: 'semimonthly', label: 'Semi-Monthly' },
   { value: 'monthly', label: 'Monthly' },
 ];
 
@@ -84,8 +83,9 @@ export function DealCalculator() {
     state: 'TN',
     acv: '',
     termMonths: '',
-    docFee: '499',
+    docFee: DOC_FEE.toFixed(2),
     downPayment: '0',
+    paymentReduction: '0',
     paymentFrequency: 'biweekly',
   });
 
@@ -118,11 +118,12 @@ export function DealCalculator() {
   const [isDecodingVin, setIsDecodingVin] = useState(false);
   const [vinError, setVinError] = useState<string | null>(null);
   const [vinSuccess, setVinSuccess] = useState(false);
+  const [showDealerMetrics, setShowDealerMetrics] = useState(true);
 
   // Pay day configuration for first payment date calculation
   const [payDayConfig, setPayDayConfig] = useState<PayDayConfig>({
     dayOfWeek: 5, // Friday default for weekly/biweekly
-    semiMonthlyDays: [1, 15], // 1st and 15th default
+    semiMonthlyDays: [1, 15], // Not used with new frequencies
     monthlyDay: 1, // 1st of month default
   });
 
@@ -131,17 +132,18 @@ export function DealCalculator() {
   const termMonths = parseInt(form.termMonths, 10) || 0;
   const docFee = parseFloat(form.docFee.replace(/[^0-9.]/g, '')) || 0;
   const downPayment = parseFloat(form.downPayment.replace(/[^0-9.]/g, '')) || 0;
+  const paymentReduction = parseFloat(form.paymentReduction.replace(/[^0-9.]/g, '')) || 0;
 
   // Auto-calculate optimal term when ACV changes
   useEffect(() => {
     if (acv > 0 && docFee >= 0 && !autoTermApplied) {
-      const optimal = calculateOptimalTerm(acv, docFee, form.state, form.paymentFrequency);
+      const optimal = calculateOptimalTerm(acv, docFee, form.state, form.paymentFrequency, downPayment, paymentReduction);
       if (optimal.term > 0) {
         setForm(prev => ({ ...prev, termMonths: optimal.term.toString() }));
         setAutoTermApplied(true);
       }
     }
-  }, [acv, docFee, form.state, form.paymentFrequency, autoTermApplied]);
+  }, [acv, docFee, form.state, form.paymentFrequency, autoTermApplied, downPayment, paymentReduction]);
 
   // Reset auto-term flag when ACV changes significantly
   useEffect(() => {
@@ -150,7 +152,7 @@ export function DealCalculator() {
 
   // Calculate deal when we have valid inputs
   const calculation = useMemo<DealCalculation | null>(() => {
-    if (acv > 0 && termMonths > 0 && termMonths <= MAX_TERM_MONTHS) {
+    if (acv > 0 && termMonths > 0 && termMonths <= MAX_TERM) {
       return calculateDeal({
         acv,
         termMonths,
@@ -158,10 +160,11 @@ export function DealCalculator() {
         state: form.state,
         paymentFrequency: form.paymentFrequency,
         downPayment,
+        paymentReduction,
       });
     }
     return null;
-  }, [acv, termMonths, docFee, form.state, form.paymentFrequency, downPayment]);
+  }, [acv, termMonths, docFee, form.state, form.paymentFrequency, downPayment, paymentReduction]);
 
   // Validate deal
   const validation = useMemo<ValidationResult | null>(() => {
@@ -199,7 +202,7 @@ export function DealCalculator() {
   };
 
   // Format currency input on blur
-  const handleCurrencyBlur = (field: 'acv' | 'docFee' | 'downPayment') => () => {
+  const handleCurrencyBlur = (field: 'acv' | 'docFee' | 'downPayment' | 'paymentReduction') => () => {
     const value = parseFloat(form[field].replace(/[^0-9.]/g, '')) || 0;
     if (value >= 0) {
       setForm((prev) => ({ ...prev, [field]: value.toFixed(2) }));
@@ -233,7 +236,7 @@ export function DealCalculator() {
       } else {
         setVinError(result.errorMessage || 'Invalid VIN');
       }
-    } catch (error) {
+    } catch {
       setVinError('Failed to decode VIN');
     } finally {
       setIsDecodingVin(false);
@@ -351,23 +354,6 @@ export function DealCalculator() {
                       ))}
                     </select>
                   )}
-                  {form.paymentFrequency === 'semimonthly' && (
-                    <select
-                      id="payDay"
-                      value={`${payDayConfig.semiMonthlyDays?.[0]},${payDayConfig.semiMonthlyDays?.[1]}`}
-                      onChange={(e) => {
-                        const [d1, d2] = e.target.value.split(',').map(Number);
-                        setPayDayConfig(prev => ({ ...prev, semiMonthlyDays: [d1, d2] as [number, number] }));
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
-                    >
-                      {SEMI_MONTHLY_SCHEDULES.map((schedule) => (
-                        <option key={schedule.value} value={schedule.value}>
-                          {schedule.label}
-                        </option>
-                      ))}
-                    </select>
-                  )}
                   {form.paymentFrequency === 'monthly' && (
                     <select
                       id="payDay"
@@ -427,6 +413,28 @@ export function DealCalculator() {
                       className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                     />
                   </div>
+                  <p className="text-xs text-gray-500 mt-1">Goes to Dealer</p>
+                </div>
+
+                {/* Payment Reduction */}
+                <div>
+                  <label htmlFor="paymentReduction" className="block text-sm font-medium text-gray-700 mb-1">
+                    Payment Reduction
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                    <input
+                      id="paymentReduction"
+                      type="text"
+                      inputMode="decimal"
+                      value={form.paymentReduction}
+                      onChange={handleInputChange('paymentReduction')}
+                      onBlur={handleCurrencyBlur('paymentReduction')}
+                      placeholder="0.00"
+                      className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Goes to Car World</p>
                 </div>
 
                 {/* Doc Fee */}
@@ -443,7 +451,7 @@ export function DealCalculator() {
                       value={form.docFee}
                       onChange={handleInputChange('docFee')}
                       onBlur={handleCurrencyBlur('docFee')}
-                      placeholder="499.00"
+                      placeholder="695.00"
                       className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                     />
                   </div>
@@ -457,8 +465,8 @@ export function DealCalculator() {
                   <input
                     id="term"
                     type="number"
-                    min="1"
-                    max={MAX_TERM_MONTHS}
+                    min="12"
+                    max={MAX_TERM}
                     value={form.termMonths}
                     onChange={handleInputChange('termMonths')}
                     placeholder="Auto"
@@ -817,13 +825,23 @@ export function DealCalculator() {
                   <ul className="mt-2 text-sm text-red-700 space-y-1">
                     {validation.errors.map((error, idx) => (
                       <li key={idx} className="flex items-start gap-1">
-                        <span className="text-red-500">•</span>
+                        <span className="text-red-500">*</span>
                         <span>
                           {error.message}
                           {error.suggestedValue && (
                             <span className="font-semibold"> Try {error.suggestedValue} months.</span>
                           )}
                         </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {validation.warnings && validation.warnings.length > 0 && (
+                  <ul className="mt-2 text-sm text-yellow-700 space-y-1">
+                    {validation.warnings.map((warning, idx) => (
+                      <li key={idx} className="flex items-start gap-1">
+                        <span className="text-yellow-500">!</span>
+                        <span>{warning}</span>
                       </li>
                     ))}
                   </ul>
@@ -905,43 +923,39 @@ export function DealCalculator() {
                   </div>
                 </div>
 
-                {/* Deal Structure - Standard Lease Display */}
+                {/* Customer View - Deal Structure */}
                 <div className="bg-white rounded-lg shadow-md p-5">
                   <h3 className="text-sm font-semibold text-gray-600 mb-3 uppercase tracking-wide">
-                    Deal Structure
+                    Customer View - Deal Structure
                   </h3>
                   <div className="space-y-2 text-sm">
                     {/* Capitalized Cost Breakdown */}
                     <div className="flex justify-between py-1">
-                      <span className="text-gray-600">Agreed Price</span>
+                      <span className="text-gray-600">Agreed Upon Vehicle Value</span>
                       <span className="font-semibold text-gray-900">{formatCurrency(calculation.agreedPrice)}</span>
                     </div>
                     <div className="flex justify-between py-1">
-                      <span className="text-gray-600">+ Doc Fee</span>
+                      <span className="text-gray-600">+ Documentation Fee</span>
                       <span className="font-semibold text-gray-900">{formatCurrency(calculation.docFee)}</span>
                     </div>
-                    <div className="flex justify-between py-1">
-                      <span className="text-gray-600">+ Sales Tax</span>
-                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.salesTaxOnPrice)}</span>
-                    </div>
                     <div className="flex justify-between py-1 border-t pt-2">
-                      <span className="text-gray-700 font-medium">= Gross Cap Cost</span>
+                      <span className="text-gray-700 font-medium">= Gross Capitalized Cost</span>
                       <span className="font-bold text-gray-900">{formatCurrency(calculation.grossCapCost)}</span>
                     </div>
                     {calculation.capCostReduction > 0 && (
                       <div className="flex justify-between py-1">
-                        <span className="text-gray-600">− Cap Cost Reduction</span>
+                        <span className="text-gray-600">- Capitalized Cost Reduction</span>
                         <span className="font-semibold text-gray-900">-{formatCurrency(calculation.capCostReduction)}</span>
                       </div>
                     )}
                     <div className="flex justify-between py-1 border-t pt-2">
-                      <span className="text-gray-700 font-medium">= Adjusted Cap Cost</span>
+                      <span className="text-gray-700 font-medium">= Adjusted Capitalized Cost</span>
                       <span className="font-bold text-gray-900">{formatCurrency(calculation.adjustedCapCost)}</span>
                     </div>
 
                     {/* Lease Calculation */}
                     <div className="flex justify-between py-1 mt-3 border-t pt-3">
-                      <span className="text-gray-600">Residual Value (15%)</span>
+                      <span className="text-gray-600">Residual Value (10%)</span>
                       <span className="font-semibold text-gray-900">{formatCurrency(calculation.residualValue)}</span>
                     </div>
                     <div className="flex justify-between py-1">
@@ -954,82 +968,101 @@ export function DealCalculator() {
                     </div>
                     <div className="flex justify-between py-1 border-t pt-2">
                       <span className="text-gray-700 font-medium">Total of Base Payments</span>
-                      <span className="font-bold text-gray-900">{formatCurrency(calculation.totalOfBasePayments)}</span>
+                      <span className="font-bold text-gray-900">{formatCurrency(calculation.totalBasePayments)}</span>
                     </div>
 
-                    {/* Amount Due */}
-                    <div className="flex justify-between py-2 bg-gray-50 -mx-5 px-5 mt-3">
-                      <span className="text-gray-700 font-medium">Due at Signing</span>
-                      <span className="font-bold text-gray-900">{formatCurrency(calculation.amountDueAtSigning)}</span>
+                    {/* Due at Signing */}
+                    <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">Due at Signing</h4>
+                      {calculation.capCostReduction > 0 && (
+                        <div className="flex justify-between py-1 text-sm">
+                          <span className="text-gray-600">Cap Cost Reduction</span>
+                          <span className="font-semibold text-gray-900">{formatCurrency(calculation.capCostReduction)}</span>
+                        </div>
+                      )}
+                      {calculation.taxCollectedAtSigning > 0 && (
+                        <div className="flex justify-between py-1 text-sm">
+                          <span className="text-gray-600">Tax Collected at Signing</span>
+                          <span className="font-semibold text-gray-900">{formatCurrency(calculation.taxCollectedAtSigning)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between py-1 border-t pt-2">
+                        <span className="text-gray-700 font-medium">Total Due at Signing</span>
+                        <span className="font-bold text-gray-900">{formatCurrency(calculation.amountDueAtSigning)}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between py-1 text-xs text-gray-500 -mx-5 px-5">
-                      <span>(Down Payment + First Payment + Doc Fee)</span>
+
+                    {/* Purchase Option */}
+                    <div className="flex justify-between py-2 mt-3 border-t pt-3">
+                      <span className="text-gray-700 font-medium">Purchase Option at End</span>
+                      <span className="font-bold text-gray-900">{formatCurrency(calculation.purchaseOptionPrice)}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Cap Cost Reduction Breakdown */}
-                {calculation.capCostReduction > 0 && (
-                  <div className="bg-white rounded-lg shadow-md p-5">
-                    <h3 className="text-sm font-semibold text-gray-600 mb-3 uppercase tracking-wide">
-                      Cap Cost Reduction Split
+                {/* Dealer View - Internal Metrics */}
+                <div className="bg-amber-50 rounded-lg shadow-md border border-amber-200">
+                  <button
+                    onClick={() => setShowDealerMetrics(!showDealerMetrics)}
+                    className="w-full p-4 flex justify-between items-center text-left"
+                  >
+                    <h3 className="text-sm font-semibold text-amber-800 uppercase tracking-wide flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      Dealer View (Internal Only)
                     </h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between py-1 border-b pb-2">
-                        <span className="text-gray-700 font-medium">Down Payment (Cap Cost Reduction)</span>
-                        <span className="font-bold text-gray-900">{formatCurrency(calculation.capCostReduction)}</span>
+                    <svg className={`w-5 h-5 text-amber-700 transition-transform ${showDealerMetrics ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {showDealerMetrics && (
+                    <div className="px-4 pb-4 space-y-2 text-sm border-t border-amber-200">
+                      <div className="flex justify-between py-2">
+                        <span className="text-amber-800">ACV (Lender Cost)</span>
+                        <span className="font-semibold text-amber-900">{formatCurrency(calculation.acv)}</span>
+                      </div>
+                      {calculation.paymentReduction > 0 && (
+                        <>
+                          <div className="flex justify-between py-1">
+                            <span className="text-amber-800">- Payment Reduction</span>
+                            <span className="font-semibold text-amber-900">-{formatCurrency(calculation.paymentReduction)}</span>
+                          </div>
+                          <div className="flex justify-between py-1 border-t border-amber-200 pt-2">
+                            <span className="text-amber-800 font-medium">= Effective ACV</span>
+                            <span className="font-bold text-amber-900">{formatCurrency(calculation.effectiveACV)}</span>
+                          </div>
+                        </>
+                      )}
+                      <div className="flex justify-between py-1">
+                        <span className="text-amber-800">Markup</span>
+                        <span className="font-semibold text-amber-900">{formatCurrency(calculation.markup)}</span>
                       </div>
                       <div className="flex justify-between py-1">
-                        <span className="text-gray-600">Dealer Share (75%)</span>
-                        <span className="font-semibold text-green-600">{formatCurrency(calculation.downPaymentDealerShare)}</span>
+                        <span className="text-amber-800">Money Factor</span>
+                        <span className="font-semibold text-amber-900">{calculation.adjustedMoneyFactor.toFixed(6)}</span>
                       </div>
                       <div className="flex justify-between py-1">
-                        <span className="text-gray-600">Car World Share (25%)</span>
-                        <span className="font-semibold text-blue-600">{formatCurrency(calculation.downPaymentCarWorldShare)}</span>
+                        <span className="text-amber-800">Implied APR</span>
+                        <span className="font-semibold text-amber-900">{calculation.impliedAPR.toFixed(2)}%</span>
+                      </div>
+                      <div className="flex justify-between py-1">
+                        <span className="text-amber-800">Investor Payment</span>
+                        <span className="font-semibold text-amber-900">{formatCurrency(calculation.investorPayment)}</span>
+                      </div>
+                      <div className="flex justify-between py-2 bg-amber-100 -mx-4 px-4 mt-2">
+                        <span className="text-amber-800 font-medium">Monthly Spread</span>
+                        <span className={`font-bold text-lg ${calculation.meetsMinSpread ? 'text-green-700' : 'text-red-700'}`}>
+                          {formatCurrency(calculation.monthlySpread)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-1 text-xs text-amber-700">
+                        <span>Target: ${MIN_SPREAD}/mo | Min: ${MIN_SPREAD}/mo</span>
+                        <span>{calculation.meetsTargetSpread ? 'Meets Target' : calculation.meetsMinSpread ? 'Above Min' : 'Below Min'}</span>
                       </div>
                     </div>
-                  </div>
-                )}
-
-                {/* Lender Metrics (collapsible) */}
-                <details className="bg-white rounded-lg shadow-md">
-                  <summary className="p-5 cursor-pointer text-sm font-semibold text-gray-600 uppercase tracking-wide hover:bg-gray-50 rounded-lg">
-                    Lender Metrics
-                  </summary>
-                  <div className="px-5 pb-5 space-y-2 text-sm border-t">
-                    <div className="flex justify-between py-2">
-                      <span className="text-gray-600">ACV (Internal Cost)</span>
-                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.acv)}</span>
-                    </div>
-                    <div className="flex justify-between py-1 items-center">
-                      <span className="text-gray-600 flex items-center gap-1">
-                        Markup
-                        {calculation.markup > MAX_MARKUP * 0.9 && calculation.markup <= MAX_MARKUP && (
-                          <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </span>
-                      <span className={`font-semibold ${calculation.markup > MAX_MARKUP ? 'text-red-600' : 'text-gray-900'}`}>
-                        {formatCurrency(calculation.markup)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between py-1">
-                      <span className="text-gray-600">Investor Payment</span>
-                      <span className="font-semibold text-gray-900">{formatCurrency(calculation.investorPayment)}</span>
-                    </div>
-                    <div className="flex justify-between py-2 bg-gray-50 -mx-5 px-5 rounded-b-lg">
-                      <span className="text-gray-700 font-medium">SPREAD (per payment)</span>
-                      <span className={`font-bold text-lg ${calculation.monthlySpreadEquivalent >= MIN_SPREAD ? 'text-green-600' : 'text-red-600'}`}>
-                        {formatCurrency(calculation.spread)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between py-1 text-xs text-gray-500">
-                      <span>Monthly Equivalent Spread</span>
-                      <span>{formatCurrency(calculation.monthlySpreadEquivalent)}</span>
-                    </div>
-                  </div>
-                </details>
+                  )}
+                </div>
               </>
             )}
           </div>

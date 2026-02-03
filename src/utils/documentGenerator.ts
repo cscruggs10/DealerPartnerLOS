@@ -143,7 +143,6 @@ function createPartyInfo(): Paragraph[] {
 function createPaymentScheduleAndDate(calculation: DealCalculation): Table {
   const isWeekly = calculation.paymentFrequency === 'weekly';
   const isBiweekly = calculation.paymentFrequency === 'biweekly';
-  const isSemimonthly = calculation.paymentFrequency === 'semimonthly';
   const isMonthly = calculation.paymentFrequency === 'monthly';
 
   return new Table({
@@ -159,8 +158,6 @@ function createPaymentScheduleAndDate(calculation: DealCalculation): Table {
                 new TextRun({ text: ' Weekly  ' }),
                 new CheckBox({ checked: isBiweekly }),
                 new TextRun({ text: ' Bi-weekly  ' }),
-                new CheckBox({ checked: isSemimonthly }),
-                new TextRun({ text: ' Semi-Monthly  ' }),
                 new CheckBox({ checked: isMonthly }),
                 new TextRun({ text: ' Monthly' }),
               ],
@@ -324,7 +321,8 @@ function createTradeInValues(): Paragraph[] {
 
 function createFederalConsumerDisclosure(calculation: DealCalculation): (Paragraph | Table)[] {
   const dispositionFee = 395;
-  const totalOfPayments = calculation.totalOfPayments + calculation.salesTax + dispositionFee;
+  // totalOfPayments already includes tax in the new model
+  const totalOfPayments = calculation.totalOfPayments + dispositionFee;
 
   return [
     sectionHeading('Federal Consumer Disclosure:'),
@@ -358,7 +356,7 @@ function createFederalConsumerDisclosure(calculation: DealCalculation): (Paragra
                   new TextRun({ text: ' payments of ' }),
                   new TextRun({ text: formatCurrency(calculation.totalPayment), bold: true }),
                   new TextRun({ text: '. The total of your periodic payments is: ' }),
-                  new TextRun({ text: formatCurrency(calculation.totalOfPayments + calculation.salesTax), bold: true }),
+                  new TextRun({ text: formatCurrency(calculation.totalOfPayments), bold: true }),
                   new TextRun({ text: '.' }),
                 ],
               }),
@@ -426,10 +424,15 @@ function createFederalConsumerDisclosure(calculation: DealCalculation): (Paragra
 }
 
 function createItemizationOfAmountDue(calculation: DealCalculation): Table {
-  const firstPayment = calculation.totalPayment;
-  const capCostReduction = calculation.downPayment;
-  const docFee = calculation.docFee;
-  const total = capCostReduction + firstPayment + docFee;
+  // In the new model:
+  // - Down payment includes tax
+  // - Cap cost reduction = down payment / (1 + tax rate)
+  // - Tax collected at signing = down payment - cap cost reduction
+  // - First payment is NOT collected at signing
+  // - Doc fee is capitalized (included in gross cap cost)
+  const capCostReduction = calculation.capCostReduction;
+  const taxAtSigning = calculation.taxCollectedAtSigning;
+  const total = calculation.amountDueAtSigning;
 
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
@@ -448,12 +451,13 @@ function createItemizationOfAmountDue(calculation: DealCalculation): Table {
               children: [new TextRun({ text: 'Amount due at Signing:', bold: true })],
             }),
           ], 3500),
-          borderedCell([new Paragraph({ children: [] })], 3500),
+          borderedCell([new Paragraph({ children: [] })], 1500),
           borderedCell([
             new Paragraph({
               children: [new TextRun({ text: 'How the amount due at Lease signing or delivery will be paid:', bold: true })],
             }),
           ], 3500),
+          borderedCell([new Paragraph({ children: [] })], 2000),
         ],
       }),
       new TableRow({
@@ -486,12 +490,12 @@ function createItemizationOfAmountDue(calculation: DealCalculation): Table {
         children: [
           borderedCell([
             new Paragraph({
-              children: [new TextRun({ text: 'First Periodic Payment' })],
+              children: [new TextRun({ text: 'Tax Collected at Signing' })],
             }),
           ], 3500),
           borderedCell([
             new Paragraph({
-              children: [new TextRun({ text: `+${formatCurrency(firstPayment)}` })],
+              children: [new TextRun({ text: `+${formatCurrency(taxAtSigning)}` })],
               alignment: AlignmentType.RIGHT,
             }),
           ], 1500),
@@ -512,12 +516,13 @@ function createItemizationOfAmountDue(calculation: DealCalculation): Table {
         children: [
           borderedCell([
             new Paragraph({
-              children: [new TextRun({ text: 'Documentation fees' })],
+              children: [new TextRun({ text: 'Total', bold: true })],
+              alignment: AlignmentType.RIGHT,
             }),
           ], 3500),
           borderedCell([
             new Paragraph({
-              children: [new TextRun({ text: `+${formatCurrency(docFee)}` })],
+              children: [new TextRun({ text: `=${formatCurrency(total)}`, bold: true })],
               alignment: AlignmentType.RIGHT,
             }),
           ], 1500),
@@ -534,47 +539,19 @@ function createItemizationOfAmountDue(calculation: DealCalculation): Table {
           ], 2000),
         ],
       }),
-      new TableRow({
-        children: [
-          borderedCell([
-            new Paragraph({
-              children: [new TextRun({ text: 'Total', bold: true })],
-              alignment: AlignmentType.RIGHT,
-            }),
-          ], 3500),
-          borderedCell([
-            new Paragraph({
-              children: [new TextRun({ text: `=${formatCurrency(total)}`, bold: true })],
-              alignment: AlignmentType.RIGHT,
-            }),
-          ], 1500),
-          borderedCell([
-            new Paragraph({
-              children: [new TextRun({ text: 'Total', bold: true })],
-              alignment: AlignmentType.RIGHT,
-            }),
-          ], 3500),
-          borderedCell([
-            new Paragraph({
-              children: [new TextRun({ text: `=${formatCurrency(total)}`, bold: true })],
-              alignment: AlignmentType.RIGHT,
-            }),
-          ], 2000),
-        ],
-      }),
     ],
   });
 }
 
 function createMannerOfPayment(calculation: DealCalculation): (Paragraph | Table)[] {
   // Manner of Payment calculations
-  const grossCapCost = calculation.agreedPrice;
-  const capCostReduction = calculation.downPayment;
-  const adjustedCapCost = grossCapCost - capCostReduction;
+  const grossCapCost = calculation.grossCapCost;
+  const capCostReduction = calculation.capCostReduction;
+  const adjustedCapCost = calculation.adjustedCapCost;
   const residualValue = calculation.residualValue;
   const depreciation = calculation.depreciation;
   const rentCharge = calculation.rentCharge;
-  const totalBasePayments = calculation.totalOfPayments;
+  const totalBasePayments = calculation.totalBasePayments;  // Without tax
   const leaseTerm = calculation.termMonths;
   const numberOfPayments = calculation.numberOfPayments;
   const basePayment = calculation.basePayment;
@@ -834,7 +811,7 @@ function createBreakdownOfCapitalizedCost(calculation: DealCalculation): Table {
       new TableRow({
         children: [
           borderedCell([new Paragraph({ children: [new TextRun({ text: 'Agreed-upon Vehicle Valuation' })] })], 4000),
-          borderedCell([new Paragraph({ children: [new TextRun({ text: formatCurrency(calculation.acv) })], alignment: AlignmentType.RIGHT })], 1500),
+          borderedCell([new Paragraph({ children: [new TextRun({ text: formatCurrency(calculation.agreedPrice) })], alignment: AlignmentType.RIGHT })], 1500),
           borderedCell([new Paragraph({ children: [new TextRun({ text: 'Service Contract and Extended Warranty' })] })], 4000),
           borderedCell([new Paragraph({ children: [new TextRun({ text: '$ ___________' })], alignment: AlignmentType.RIGHT })], 1500),
         ],
