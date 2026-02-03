@@ -390,7 +390,7 @@ export function AdminDashboard() {
       <header className="bg-indigo-600 text-white shadow">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <div>
-            <h1 className="text-xl font-bold">Car World Admin</h1>
+            <h1 className="text-xl font-bold">Deal Machine Admin</h1>
             <p className="text-sm text-indigo-200">Lease Management System</p>
           </div>
           <div className="flex items-center gap-4">

@@ -104,7 +104,7 @@ function createPartyInfo(): Paragraph[] {
     new Paragraph({
       children: [
         new TextRun({ text: 'Name, Address (Lessor): ', bold: true }),
-        new TextRun({ text: 'Car World Leasing' }),
+        new TextRun({ text: 'i Finance Leasing' }),
       ],
     }),
     new Paragraph({
@@ -1341,11 +1341,11 @@ export async function downloadLeaseDocument(calculation: DealCalculation): Promi
 
   const doc = generateLeaseDocument({
     calculation,
-    lessorName: 'Car World Leasing',
+    lessorName: 'i Finance Leasing',
     lessorAddress: '',
   });
 
   const blob = await Packer.toBlob(doc);
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  saveAs(blob, `CarWorld_Lease_${timestamp}.docx`);
+  saveAs(blob, `DealMachine_Lease_${timestamp}.docx`);
 }

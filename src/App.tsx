@@ -41,8 +41,9 @@ function App() {
         <div className="min-h-screen flex items-center justify-center bg-gray-100">
           <div className="bg-white p-8 rounded-lg shadow-lg">
             <h1 className="text-2xl font-bold text-center mb-6 text-gray-800">
-              Car World Dealer Portal
+              Deal Machine Dealer Network
             </h1>
+            <p className="text-sm text-gray-500 text-center mb-4">powered by i Finance</p>
             <SignIn
               appearance={{
                 elements: {

@@ -102,7 +102,7 @@ export function generateLeasePDF(contractData: ContractData): void {
   y += 18;
 
   // Lessor/Lessee Box
-  const lessorName = dealerProfile?.name || 'Car World Leasing';
+  const lessorName = dealerProfile?.name || 'i Finance Leasing';
   const lessorAddress = dealerProfile?.address || '[Address]\n[City, State ZIP]';
 
   autoTable(doc, {

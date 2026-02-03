@@ -368,7 +368,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
               </button>
             )}
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold">Car World Lease Calculator</h1>
+              <h1 className="text-2xl md:text-3xl font-bold">Deal Machine Lease Calculator</h1>
               <p className="text-blue-200 text-sm mt-1">
                 {dealerProfile ? dealerProfile.name : 'Dealer Partner Portal'}
               </p>
@@ -527,7 +527,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                       className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                     />
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">Goes to Car World</p>
+                  <p className="text-xs text-gray-500 mt-1">Goes to i Finance</p>
                 </div>
 
                 {/* Doc Fee */}
@@ -1208,7 +1208,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
       {/* Footer */}
       <footer className="bg-gray-100 border-t mt-8 py-4">
         <div className="max-w-7xl mx-auto px-4 text-center text-xs text-gray-500">
-          Car World Dealer Partner Portal &copy; {new Date().getFullYear()}
+          Deal Machine Dealer Network powered by i Finance &copy; {new Date().getFullYear()}
         </div>
       </footer>
     </div>
