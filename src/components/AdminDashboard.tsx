@@ -32,6 +32,8 @@ export function AdminDashboard() {
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [selectedLease, setSelectedLease] = useState<LeaseData | null>(null)
   const [rejectNote, setRejectNote] = useState('')
+  const [previewDoc, setPreviewDoc] = useState<{ url: string; type: string; name: string } | null>(null)
+  const [loadingPreview, setLoadingPreview] = useState(false)
 
   useEffect(() => {
     loadLeases()
@@ -135,6 +137,21 @@ export function AdminDashboard() {
     }
   }
 
+  const handlePreviewDocument = async (docId: string) => {
+    try {
+      setLoadingPreview(true)
+      const doc = await downloadDocument(docId)
+      // Create a data URL from the base64 file data
+      const dataUrl = `data:${doc.mimeType};base64,${doc.fileData}`
+      setPreviewDoc({ url: dataUrl, type: doc.mimeType, name: doc.fileName })
+    } catch (err) {
+      alert('Failed to load document preview')
+      console.error(err)
+    } finally {
+      setLoadingPreview(false)
+    }
+  }
+
   const getStatusColor = (status: LeaseData['status']) => {
     switch (status) {
       case 'PENDING': return 'bg-yellow-100 text-yellow-800'
@@ -168,10 +185,63 @@ export function AdminDashboard() {
     }).format(value)
   }
 
+  // Document Preview Modal
+  const PreviewModal = () => {
+    if (!previewDoc) return null
+
+    const isImage = previewDoc.type.startsWith('image/')
+    const isPdf = previewDoc.type === 'application/pdf'
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] flex flex-col">
+          <div className="flex justify-between items-center p-4 border-b">
+            <h3 className="font-semibold text-gray-800">{previewDoc.name}</h3>
+            <button
+              onClick={() => setPreviewDoc(null)}
+              className="p-2 hover:bg-gray-100 rounded-lg"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="flex-1 overflow-auto p-4 bg-gray-100">
+            {isImage ? (
+              <img
+                src={previewDoc.url}
+                alt={previewDoc.name}
+                className="max-w-full mx-auto"
+              />
+            ) : isPdf ? (
+              <iframe
+                src={previewDoc.url}
+                className="w-full h-[70vh]"
+                title={previewDoc.name}
+              />
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-gray-500 mb-4">Preview not available for this file type</p>
+                <a
+                  href={previewDoc.url}
+                  download={previewDoc.name}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Download File
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Document Review Modal
   if (selectedLease) {
     return (
       <div className="min-h-screen bg-gray-100">
+        <PreviewModal />
         <header className="bg-indigo-600 text-white shadow">
           <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
             <div className="flex items-center gap-4">
@@ -269,10 +339,11 @@ export function AdminDashboard() {
 
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => downloadDocument(doc.id)}
-                          className="px-3 py-1 text-blue-600 hover:text-blue-800 text-sm"
+                          onClick={() => handlePreviewDocument(doc.id)}
+                          disabled={loadingPreview}
+                          className="px-3 py-1 text-blue-600 hover:text-blue-800 text-sm disabled:opacity-50"
                         >
-                          View
+                          {loadingPreview ? 'Loading...' : 'View'}
                         </button>
                         {doc.status === 'PENDING' && (
                           <>
