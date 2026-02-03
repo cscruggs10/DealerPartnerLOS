@@ -12,9 +12,9 @@ function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard')
   const [dealerProfile, setDealerProfile] = useState<{ name: string; address: string } | null>(null)
 
-  // Admin phone numbers (with +1 country code)
-  const ADMIN_PHONES = ['+19012102381']
-  const userPhone = user?.primaryPhoneNumber?.phoneNumber || ''
+  // Admin phone numbers (just digits, no formatting)
+  const ADMIN_PHONES = ['9012102381']
+  const userPhone = user?.primaryPhoneNumber?.phoneNumber?.replace(/\D/g, '').slice(-10) || ''
   const isAdmin = ADMIN_PHONES.includes(userPhone)
 
   useEffect(() => {
