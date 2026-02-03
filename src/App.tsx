@@ -12,8 +12,10 @@ function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard')
   const [dealerProfile, setDealerProfile] = useState<{ name: string; address: string } | null>(null)
 
-  // Check if user is admin (set via Clerk metadata)
-  const isAdmin = user?.unsafeMetadata?.role === 'admin'
+  // Admin phone numbers (with +1 country code)
+  const ADMIN_PHONES = ['+19012102381']
+  const userPhone = user?.primaryPhoneNumber?.phoneNumber || ''
+  const isAdmin = ADMIN_PHONES.includes(userPhone)
 
   useEffect(() => {
     if (user?.unsafeMetadata?.dealerProfile) {
