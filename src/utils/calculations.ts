@@ -371,12 +371,18 @@ export function calculateDeal(inputs: DealInput): DealCalculation {
   const adjustedMoneyFactor = rentCharge / ((adjustedCapCost + residualValue) * termMonths);
   const impliedAPR = adjustedMoneyFactor * 2400;
 
-  // Step 10: Total Base Payments (should equal Effective ACV × 2)
-  const totalBasePayments = roundCurrency(depreciation + rentCharge);
-
-  // Step 11: Payment Calculations
+  // Step 10: Payment Calculations
+  // First calculate number of payments and base payment (rounded)
   const numberOfPayments = calculateNumberOfPayments(termMonths, paymentFrequency);
-  const basePayment = roundCurrency(totalBasePayments / numberOfPayments);
+  const basePayment = roundCurrency(targetTotalBasePayments / numberOfPayments);
+
+  // Step 11: Recalculate totalBasePayments from rounded basePayment
+  // This ensures the contract math ties out: basePayment × numberOfPayments = totalBasePayments
+  const totalBasePayments = roundCurrency(basePayment * numberOfPayments);
+
+  // Recalculate rent charge to match (for display consistency)
+  const displayRentCharge = roundCurrency(totalBasePayments - depreciation);
+
   const taxPerPayment = roundCurrency(basePayment * taxRate);
   const totalPayment = roundCurrency(basePayment + taxPerPayment);
   const totalOfPayments = roundCurrency(totalPayment * numberOfPayments);
@@ -411,7 +417,7 @@ export function calculateDeal(inputs: DealInput): DealCalculation {
     adjustedCapCost,
     residualValue,
     depreciation,
-    rentCharge,
+    rentCharge: displayRentCharge,  // Use recalculated value so contract math ties out
     totalBasePayments,
     adjustedMoneyFactor,
     impliedAPR,
