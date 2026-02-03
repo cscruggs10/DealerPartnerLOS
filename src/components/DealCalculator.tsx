@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useUser } from '@clerk/clerk-react';
 import {
   calculateDeal,
   validateDeal,
@@ -71,7 +72,13 @@ const FREQUENCIES: { value: PaymentFrequency; label: string }[] = [
   { value: 'monthly', label: 'Monthly' },
 ];
 
-export function DealCalculator() {
+interface DealCalculatorProps {
+  dealerProfile?: { name: string; address: string };
+  onBack?: () => void;
+}
+
+export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = {}) {
+  const { user } = useUser();
   const [form, setForm] = useState<FormState>({
     state: 'TN',
     acv: '',
@@ -112,6 +119,8 @@ export function DealCalculator() {
   const [vinError, setVinError] = useState<string | null>(null);
   const [vinSuccess, setVinSuccess] = useState(false);
   const [showDealerMetrics, setShowDealerMetrics] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedLeaseId, setSavedLeaseId] = useState<string | null>(null);
 
   // Customer's next pay date (we skip this one, first payment is the one after)
   const [nextPayDate, setNextPayDate] = useState<string>('');
@@ -280,15 +289,81 @@ export function DealCalculator() {
     }
   };
 
+  // Save lease to dashboard
+  const handleSaveLease = () => {
+    if (!calculation || !validation?.isValid || !user) return;
+
+    setIsSaving(true);
+    try {
+      const leaseId = crypto.randomUUID();
+      const lease = {
+        id: leaseId,
+        status: 'PENDING' as const,
+        customerName: customer.lesseeName || 'Unknown Customer',
+        vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim() || 'Unknown Vehicle',
+        monthlyPayment: calculation.totalPayment,
+        createdAt: new Date().toISOString(),
+        dealData: {
+          calculation,
+          vehicle,
+          customer,
+          dealerProfile,
+          firstPaymentDate: firstPaymentDate?.formattedDate,
+        },
+      };
+
+      // Get existing leases
+      const existingLeases = JSON.parse(localStorage.getItem(`leases_${user.id}`) || '[]');
+      existingLeases.unshift(lease);
+      localStorage.setItem(`leases_${user.id}`, JSON.stringify(existingLeases));
+
+      setSavedLeaseId(leaseId);
+
+      // Return to dashboard after saving
+      if (onBack) {
+        setTimeout(() => onBack(), 500);
+      }
+    } catch (error) {
+      console.error('Failed to save lease:', error);
+      alert('Failed to save lease. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const validRange = validation?.validTermRange;
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-blue-800 text-white py-5 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4">
-          <h1 className="text-2xl md:text-3xl font-bold">Car World Lease Calculator</h1>
-          <p className="text-blue-200 text-sm mt-1">Dealer Partner Portal</p>
+        <div className="max-w-7xl mx-auto px-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            {onBack && (
+              <button
+                onClick={onBack}
+                className="p-2 hover:bg-blue-700 rounded-lg transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+            )}
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold">Car World Lease Calculator</h1>
+              <p className="text-blue-200 text-sm mt-1">
+                {dealerProfile ? dealerProfile.name : 'Dealer Partner Portal'}
+              </p>
+            </div>
+          </div>
+          {savedLeaseId && (
+            <span className="text-green-300 text-sm flex items-center gap-1">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              Saved
+            </span>
+          )}
         </div>
       </header>
 
@@ -849,33 +924,73 @@ export function DealCalculator() {
               </div>
             )}
 
-            {/* Generate Contract Button */}
-            <button
-              onClick={handleGenerateContract}
-              disabled={!validation?.isValid || isGenerating}
-              className={`w-full py-4 px-6 rounded-lg font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-3 ${
-                validation?.isValid && !isGenerating
-                  ? 'bg-green-600 hover:bg-green-700 text-white cursor-pointer'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              {isGenerating ? (
-                <>
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Generate Contract
-                </>
+            {/* Action Buttons */}
+            <div className="space-y-3">
+              <button
+                onClick={handleGenerateContract}
+                disabled={!validation?.isValid || isGenerating || !firstPaymentDate}
+                className={`w-full py-4 px-6 rounded-lg font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-3 ${
+                  validation?.isValid && !isGenerating && firstPaymentDate
+                    ? 'bg-green-600 hover:bg-green-700 text-white cursor-pointer'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {isGenerating ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Generate Contract
+                  </>
+                )}
+              </button>
+
+              {onBack && (
+                <button
+                  onClick={handleSaveLease}
+                  disabled={!validation?.isValid || isSaving || savedLeaseId !== null}
+                  className={`w-full py-3 px-6 rounded-lg font-medium transition-all flex items-center justify-center gap-2 ${
+                    validation?.isValid && !isSaving && !savedLeaseId
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
+                      : savedLeaseId
+                        ? 'bg-green-100 text-green-700 cursor-default'
+                        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  {isSaving ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Saving...
+                    </>
+                  ) : savedLeaseId ? (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Saved to Dashboard
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                      </svg>
+                      Save to Dashboard
+                    </>
+                  )}
+                </button>
               )}
-            </button>
+            </div>
           </div>
 
           {/* Right Column - Calculations */}

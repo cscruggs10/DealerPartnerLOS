@@ -1,0 +1,64 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Dealer {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique // Clerk user ID (from phone auth)
+  phone     String   @unique
+  name      String?
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  leases    Lease[]
+}
+
+model Lease {
+  id        String      @id @default(cuid())
+  dealerId  String
+  dealer    Dealer      @relation(fields: [dealerId], references: [id])
+  status    LeaseStatus @default(PENDING)
+
+  // Customer Info
+  customerFirstName  String
+  customerLastName   String
+  customerAddress    String?
+  customerCity       String?
+  customerState      String?
+  customerZip        String?
+  customerPhone      String?
+
+  // Co-Lessee Info (optional)
+  coLesseeFirstName  String?
+  coLesseeLastName   String?
+
+  // Vehicle Info
+  vehicleYear        String
+  vehicleMake        String
+  vehicleModel       String
+  vehicleVin         String
+  vehicleMileage     Int
+
+  // Deal Data (stored as JSON for flexibility)
+  dealData           Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum LeaseStatus {
+  PENDING   // Just created, can be deleted
+  POSTED    // Submitted for funding
+  FUNDED    // Funding approved
+  ACTIVE    // Lease is active
+  COMPLETED // Lease completed
+  CANCELLED // Lease was cancelled
+}
