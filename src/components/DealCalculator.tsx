@@ -19,6 +19,7 @@ import {
 } from '../utils/constants';
 import { downloadLeasePDF } from '../utils/pdfGenerator';
 import { decodeVIN, type VehicleInfo } from '../utils/vinDecoder';
+import { createLease } from '../services/api';
 
 interface FormState {
   state: SupportedState;
@@ -291,20 +292,40 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
     }
   };
 
-  // Save lease to dashboard
-  const handleSaveLease = () => {
+  // Save lease to dashboard via API
+  const handleSaveLease = async () => {
     if (!calculation || !validation?.isValid || !user) return;
 
     setIsSaving(true);
     try {
-      const leaseId = crypto.randomUUID();
-      const lease = {
-        id: leaseId,
-        status: 'PENDING' as const,
-        customerName: customer.lesseeName || 'Unknown Customer',
-        vehicle: `${vehicle.year} ${vehicle.make} ${vehicle.model}`.trim() || 'Unknown Vehicle',
-        monthlyPayment: calculation.totalPayment,
-        createdAt: new Date().toISOString(),
+      // Parse customer name into first/last
+      const nameParts = (customer.lesseeName || 'Unknown Customer').trim().split(' ');
+      const customerFirstName = nameParts[0] || 'Unknown';
+      const customerLastName = nameParts.slice(1).join(' ') || '';
+
+      // Parse co-lessee name
+      const coNameParts = (customer.coLesseeName || '').trim().split(' ');
+      const coLesseeFirstName = coNameParts[0] || undefined;
+      const coLesseeLastName = coNameParts.length > 1 ? coNameParts.slice(1).join(' ') : undefined;
+
+      const lease = await createLease(user.id, {
+        dealerName: dealerProfile?.name,
+        dealerAddress: dealerProfile?.address,
+        dealerPhone: user.primaryPhoneNumber?.phoneNumber,
+        customerFirstName,
+        customerLastName,
+        customerAddress: customer.lesseeAddress,
+        customerCity: customer.lesseeCity,
+        customerState: customer.lesseeState,
+        customerZip: customer.lesseeZip,
+        customerPhone: customer.lesseePhone,
+        coLesseeFirstName,
+        coLesseeLastName,
+        vehicleYear: vehicle.year,
+        vehicleMake: vehicle.make,
+        vehicleModel: vehicle.model,
+        vehicleVin: vehicle.vin,
+        vehicleMileage: parseInt(vehicle.odometer, 10) || 0,
         dealData: {
           calculation,
           vehicle,
@@ -312,14 +333,9 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
           dealerProfile,
           firstPaymentDate: firstPaymentDate?.formattedDate,
         },
-      };
+      });
 
-      // Get existing leases
-      const existingLeases = JSON.parse(localStorage.getItem(`leases_${user.id}`) || '[]');
-      existingLeases.unshift(lease);
-      localStorage.setItem(`leases_${user.id}`, JSON.stringify(existingLeases));
-
-      setSavedLeaseId(leaseId);
+      setSavedLeaseId(lease.id);
 
       // Return to dashboard after saving
       if (onBack) {

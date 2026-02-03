@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { DealCalculator } from './components/DealCalculator'
 import { Dashboard } from './components/Dashboard'
 import { DealerSetup } from './components/DealerSetup'
+import { AdminDashboard } from './components/AdminDashboard'
 
 type View = 'dashboard' | 'calculator'
 
@@ -10,6 +11,9 @@ function App() {
   const { user, isLoaded } = useUser()
   const [currentView, setCurrentView] = useState<View>('dashboard')
   const [dealerProfile, setDealerProfile] = useState<{ name: string; address: string } | null>(null)
+
+  // Check if user is admin (set via Clerk metadata)
+  const isAdmin = user?.unsafeMetadata?.role === 'admin'
 
   useEffect(() => {
     if (user?.unsafeMetadata?.dealerProfile) {
@@ -50,14 +54,20 @@ function App() {
       </SignedOut>
 
       <SignedIn>
-        {!dealerProfile ? (
+        {isAdmin ? (
+          // Admin users see the Admin Dashboard
+          <AdminDashboard />
+        ) : !dealerProfile ? (
+          // New dealers need to set up their profile
           <DealerSetup onProfileSaved={handleProfileSaved} />
         ) : currentView === 'dashboard' ? (
+          // Dealers see their dashboard
           <Dashboard
             dealerProfile={dealerProfile}
             onNewDeal={() => setCurrentView('calculator')}
           />
         ) : (
+          // Deal calculator view
           <DealCalculator
             dealerProfile={dealerProfile}
             onBack={() => setCurrentView('dashboard')}

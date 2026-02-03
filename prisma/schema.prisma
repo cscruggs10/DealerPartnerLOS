@@ -2,8 +2,7 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -50,15 +49,63 @@ model Lease {
   // Deal Data (stored as JSON for flexibility)
   dealData           Json
 
+  // Verification fields
+  customerEmail         String?
+  customerEmailVerified Boolean @default(false)
+  customerCellVerified  Boolean @default(false)
+
+  // Documents/Stips
+  documents LeaseDocument[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
+model LeaseDocument {
+  id        String       @id @default(cuid())
+  leaseId   String
+  lease     Lease        @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+
+  type      DocumentType
+  fileName  String
+  fileSize  Int
+  mimeType  String
+
+  // Store file as base64 for simplicity (for production, use S3/cloud storage)
+  fileData  String       @db.Text
+
+  // Admin review
+  status    DocumentStatus @default(PENDING)
+  notes     String?
+
+  uploadedAt DateTime @default(now())
+  reviewedAt DateTime?
+}
+
 enum LeaseStatus {
   PENDING   // Just created, can be deleted
-  POSTED    // Submitted for funding
+  POSTED    // Submitted, awaiting document collection
+  CHECKLIST // Documents being collected/reviewed
   FUNDED    // Funding approved
   ACTIVE    // Lease is active
   COMPLETED // Lease completed
   CANCELLED // Lease was cancelled
+}
+
+enum DocumentType {
+  CONTRACT          // Executed contract
+  TIER_SHEET        // Tier calculator result
+  DRIVERS_LICENSE   // Copy of DL
+  PROOF_OF_RESIDENCE // POR document
+  PROOF_OF_INCOME   // POI document
+  INSURANCE         // Dec page with requirements
+  CREDIT_APPLICATION // Credit app copy
+  CREDIT_REPORT     // Credit report copy
+  TITLE_APPLICATION // Title app (MS or TN)
+}
+
+enum DocumentStatus {
+  PENDING   // Awaiting review
+  APPROVED  // Document accepted
+  REJECTED  // Document needs to be re-uploaded
 }
