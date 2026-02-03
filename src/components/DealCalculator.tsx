@@ -18,13 +18,6 @@ import {
 } from '../utils/constants';
 import { downloadLeasePDF } from '../utils/pdfGenerator';
 import { decodeVIN, type VehicleInfo } from '../utils/vinDecoder';
-import {
-  calculateFirstPaymentDate,
-  DAYS_OF_WEEK,
-  DAYS_OF_MONTH,
-  type PayDayConfig,
-  type FirstPaymentResult,
-} from '../utils/paymentDateCalculator';
 
 interface FormState {
   state: SupportedState;
@@ -120,12 +113,8 @@ export function DealCalculator() {
   const [vinSuccess, setVinSuccess] = useState(false);
   const [showDealerMetrics, setShowDealerMetrics] = useState(true);
 
-  // Pay day configuration for first payment date calculation
-  const [payDayConfig, setPayDayConfig] = useState<PayDayConfig>({
-    dayOfWeek: 5, // Friday default for weekly/biweekly
-    semiMonthlyDays: [1, 15], // Not used with new frequencies
-    monthlyDay: 1, // 1st of month default
-  });
+  // Customer's next pay date (we skip this one, first payment is the one after)
+  const [nextPayDate, setNextPayDate] = useState<string>('');
 
   // Parse form values
   const acv = parseFloat(form.acv.replace(/[^0-9.]/g, '')) || 0;
@@ -174,10 +163,37 @@ export function DealCalculator() {
     return null;
   }, [calculation]);
 
-  // Calculate first payment date based on customer pay schedule
-  const firstPaymentDate = useMemo<FirstPaymentResult | null>(() => {
-    return calculateFirstPaymentDate(form.paymentFrequency, payDayConfig);
-  }, [form.paymentFrequency, payDayConfig]);
+  // Calculate first payment date: skip customer's next payday, first payment is the one after
+  const firstPaymentDate = useMemo<{ date: Date; formattedDate: string } | null>(() => {
+    if (!nextPayDate) return null;
+
+    const nextPay = new Date(nextPayDate + 'T00:00:00');
+    if (isNaN(nextPay.getTime())) return null;
+
+    const firstPayment = new Date(nextPay);
+
+    // Add one payment period based on frequency
+    switch (form.paymentFrequency) {
+      case 'weekly':
+        firstPayment.setDate(firstPayment.getDate() + 7);
+        break;
+      case 'biweekly':
+        firstPayment.setDate(firstPayment.getDate() + 14);
+        break;
+      case 'monthly':
+        firstPayment.setMonth(firstPayment.getMonth() + 1);
+        break;
+    }
+
+    const formattedDate = firstPayment.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+
+    return { date: firstPayment, formattedDate };
+  }, [nextPayDate, form.paymentFrequency]);
 
   const handleInputChange = (field: keyof FormState) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -335,42 +351,26 @@ export function DealCalculator() {
                   </p>
                 </div>
 
-                {/* Customer Pay Day */}
+                {/* Customer Next Pay Date */}
                 <div>
-                  <label htmlFor="payDay" className="block text-sm font-medium text-gray-700 mb-1">
-                    Customer Pay Day
+                  <label htmlFor="nextPayDate" className="block text-sm font-medium text-gray-700 mb-1">
+                    Customer Next Pay Date
                   </label>
-                  {(form.paymentFrequency === 'weekly' || form.paymentFrequency === 'biweekly') && (
-                    <select
-                      id="payDay"
-                      value={payDayConfig.dayOfWeek}
-                      onChange={(e) => setPayDayConfig(prev => ({ ...prev, dayOfWeek: parseInt(e.target.value) }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
-                    >
-                      {DAYS_OF_WEEK.map((day) => (
-                        <option key={day.value} value={day.value}>
-                          {day.label}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {form.paymentFrequency === 'monthly' && (
-                    <select
-                      id="payDay"
-                      value={payDayConfig.monthlyDay}
-                      onChange={(e) => setPayDayConfig(prev => ({ ...prev, monthlyDay: parseInt(e.target.value) }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
-                    >
-                      {DAYS_OF_MONTH.map((day) => (
-                        <option key={day.value} value={day.value}>
-                          {day.label}
-                        </option>
-                      ))}
-                    </select>
-                  )}
+                  <input
+                    id="nextPayDate"
+                    type="date"
+                    value={nextPayDate}
+                    onChange={(e) => setNextPayDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                  />
                   {firstPaymentDate && (
                     <p className="text-xs text-green-600 mt-1 font-medium">
                       1st Payment: {firstPaymentDate.formattedDate}
+                    </p>
+                  )}
+                  {!nextPayDate && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      First payment will be one {form.paymentFrequency === 'monthly' ? 'month' : form.paymentFrequency === 'biweekly' ? '2 weeks' : 'week'} after this date
                     </p>
                   )}
                 </div>
