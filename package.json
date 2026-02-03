@@ -19,14 +19,14 @@
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.60.0",
-    "@prisma/client": "^7.3.0",
+    "@prisma/client": "^5.22.0",
     "cors": "^2.8.5",
     "docx": "^9.5.1",
     "express": "^4.21.0",
     "file-saver": "^2.0.5",
     "jspdf": "^4.0.0",
     "jspdf-autotable": "^5.0.7",
-    "prisma": "^7.3.0",
+    "prisma": "^5.22.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
