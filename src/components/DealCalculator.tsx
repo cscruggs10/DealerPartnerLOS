@@ -919,6 +919,9 @@ export function DealCalculator() {
                         <span className="text-blue-100 font-medium">TOTAL PAYMENT</span>
                         <span className="text-3xl font-bold text-white">{formatCurrency(calculation.totalPayment)}</span>
                       </div>
+                      <div className="text-center mt-2">
+                        <span className="text-blue-200 text-sm">{calculation.numberOfPayments} {calculation.paymentFrequencyLabel} Payments</span>
+                      </div>
                     </div>
                   </div>
                 </div>
