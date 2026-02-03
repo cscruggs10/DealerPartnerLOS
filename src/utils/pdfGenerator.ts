@@ -17,7 +17,7 @@ function formatCurrency(value: number): string {
 }
 
 function checkbox(checked: boolean): string {
-  return checked ? '☑' : '☐';
+  return checked ? '[X]' : '[ ]';
 }
 
 function getFrequencyLabel(frequency: string): string {
@@ -55,37 +55,51 @@ export function generateLeasePDF(contractData: ContractData): void {
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 40;
   const contentWidth = pageWidth - 2 * margin;
+  const bottomMargin = 50;
   let y = margin;
 
   const frequencyLabel = getFrequencyLabel(calculation.paymentFrequency);
   const frequencyText = getFrequencyText(calculation.paymentFrequency);
   const today = new Date().toLocaleDateString('en-US');
 
-  // Helper to add page if needed
-  const checkPage = (needed: number) => {
-    if (y + needed > pageHeight - margin) {
+  // Helper to add page if needed - returns true if new page was added
+  const checkPage = (needed: number): boolean => {
+    if (y + needed > pageHeight - bottomMargin) {
       doc.addPage();
       y = margin;
+      return true;
     }
+    return false;
+  };
+
+  // Helper to add section header
+  const addSectionHeader = (title: string, bgColor: [number, number, number] = [220, 220, 220]) => {
+    checkPage(30);
+    doc.setFillColor(...bgColor);
+    doc.rect(margin, y, contentWidth, 16, 'F');
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title, margin + 5, y + 11);
+    y += 22;
   };
 
   // ==================== PAGE 1: TITLE & DISCLOSURES ====================
 
   // Title
-  doc.setFontSize(18);
+  doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
   doc.text('MOTOR VEHICLE LEASE AGREEMENT', pageWidth / 2, y, { align: 'center' });
-  y += 20;
-  doc.setFontSize(14);
+  y += 16;
+  doc.setFontSize(12);
   doc.text('CLOSED END', pageWidth / 2, y, { align: 'center' });
-  y += 30;
+  y += 22;
 
   // Date and State
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.text(`Date: ${today}`, margin, y);
   doc.text(`State: ${calculation.state}     County: _________________`, pageWidth / 2, y);
-  y += 25;
+  y += 18;
 
   // Lessor/Lessee Box
   autoTable(doc, {
@@ -96,12 +110,12 @@ export function generateLeasePDF(contractData: ContractData): void {
       `Name: ${customer.lesseeName || '_______________________'}\nAddress: ${customer.lesseeAddress || '_______________________'}\nCity/State/ZIP: ${customer.lesseeCity || '___________'}, ${customer.lesseeState || '____'} ${customer.lesseeZip || '_______'}\nPhone: ${customer.lesseePhone || '___________________'}`
     ]],
     theme: 'grid',
-    headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 10 },
-    bodyStyles: { fontSize: 9, cellPadding: 6 },
+    headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9 },
+    bodyStyles: { fontSize: 8, cellPadding: 4 },
     columnStyles: { 0: { cellWidth: contentWidth / 2 }, 1: { cellWidth: contentWidth / 2 } },
     margin: { left: margin, right: margin },
   });
-  y = (doc as any).lastAutoTable.finalY + 5;
+  y = (doc as any).lastAutoTable.finalY + 3;
 
   // Stock # and Co-Lessee
   autoTable(doc, {
@@ -111,17 +125,17 @@ export function generateLeasePDF(contractData: ContractData): void {
       `CO-LESSEE: ${customer.coLesseeName || '_______________________'}`
     ]],
     theme: 'grid',
-    bodyStyles: { fontSize: 9, cellPadding: 4 },
+    bodyStyles: { fontSize: 8, cellPadding: 3 },
     columnStyles: { 0: { cellWidth: contentWidth / 2 }, 1: { cellWidth: contentWidth / 2 } },
     margin: { left: margin, right: margin },
   });
-  y = (doc as any).lastAutoTable.finalY + 15;
+  y = (doc as any).lastAutoTable.finalY + 10;
 
   // Vehicle Description
-  doc.setFontSize(11);
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text('VEHICLE DESCRIPTION', margin, y);
-  y += 12;
+  y += 10;
 
   autoTable(doc, {
     startY: y,
@@ -135,27 +149,27 @@ export function generateLeasePDF(contractData: ContractData): void {
       vehicle.odometer || '________'
     ]],
     theme: 'grid',
-    headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9 },
-    bodyStyles: { fontSize: 9, cellPadding: 5 },
+    headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8 },
+    bodyStyles: { fontSize: 8, cellPadding: 4 },
     margin: { left: margin, right: margin },
   });
-  y = (doc as any).lastAutoTable.finalY + 15;
+  y = (doc as any).lastAutoTable.finalY + 10;
 
   // FCLA Header
   doc.setFillColor(220, 220, 220);
-  doc.rect(margin, y, contentWidth, 18, 'F');
-  doc.setFontSize(11);
+  doc.rect(margin, y, contentWidth, 14, 'F');
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
-  doc.text('FEDERAL CONSUMER LEASING ACT DISCLOSURES', pageWidth / 2, y + 13, { align: 'center' });
-  y += 25;
+  doc.text('FEDERAL CONSUMER LEASING ACT DISCLOSURES', pageWidth / 2, y + 10, { align: 'center' });
+  y += 18;
 
   // Payment Schedule Selection
-  doc.setFontSize(10);
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.text('PAYMENT SCHEDULE:', margin, y);
   doc.setFont('helvetica', 'normal');
-  doc.text(`${checkbox(calculation.paymentFrequency === 'monthly')} Monthly    ${checkbox(calculation.paymentFrequency === 'biweekly')} Bi-Weekly    ${checkbox(calculation.paymentFrequency === 'weekly')} Weekly`, margin + 110, y);
-  y += 20;
+  doc.text(`${checkbox(calculation.paymentFrequency === 'monthly')} Monthly    ${checkbox(calculation.paymentFrequency === 'biweekly')} Bi-Weekly    ${checkbox(calculation.paymentFrequency === 'weekly')} Weekly`, margin + 90, y);
+  y += 14;
 
   // Main Disclosure Box (3 columns)
   autoTable(doc, {
@@ -167,17 +181,17 @@ export function generateLeasePDF(contractData: ContractData): void {
       `${formatCurrency(calculation.totalOfPayments)}\n(Amount you will have paid by end of lease)`
     ]],
     theme: 'grid',
-    headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 9, halign: 'center' },
-    bodyStyles: { fontSize: 9, cellPadding: 8, halign: 'center', valign: 'middle' },
+    headStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8, halign: 'center' },
+    bodyStyles: { fontSize: 8, cellPadding: 6, halign: 'center', valign: 'middle' },
     margin: { left: margin, right: margin },
   });
-  y = (doc as any).lastAutoTable.finalY + 15;
+  y = (doc as any).lastAutoTable.finalY + 10;
 
   // Itemization Table
-  doc.setFontSize(10);
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.text('* ITEMIZATION OF AMOUNT DUE AT LEASE SIGNING:', margin, y);
-  y += 12;
+  y += 10;
 
   autoTable(doc, {
     startY: y,
@@ -187,115 +201,103 @@ export function generateLeasePDF(contractData: ContractData): void {
       [{ content: 'TOTAL AMOUNT DUE AT SIGNING', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }, { content: formatCurrency(calculation.amountDueAtSigning), styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }],
     ],
     theme: 'grid',
-    bodyStyles: { fontSize: 9, cellPadding: 5 },
-    columnStyles: { 0: { cellWidth: 200 }, 1: { cellWidth: 100, halign: 'right' }, 2: { cellWidth: contentWidth - 300 } },
+    bodyStyles: { fontSize: 8, cellPadding: 4 },
+    columnStyles: { 0: { cellWidth: 180 }, 1: { cellWidth: 80, halign: 'right' }, 2: { cellWidth: contentWidth - 260 } },
     margin: { left: margin, right: margin },
   });
-  y = (doc as any).lastAutoTable.finalY + 15;
+  y = (doc as any).lastAutoTable.finalY + 10;
 
   // Payment Calculation Breakdown
   doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
   doc.text('YOUR PAYMENT IS DETERMINED AS SHOWN BELOW:', margin, y);
-  y += 12;
+  y += 10;
 
   autoTable(doc, {
     startY: y,
     body: [
       ['Agreed Upon Vehicle Value', formatCurrency(calculation.agreedPrice)],
       ['Documentation Fee', '+ ' + formatCurrency(calculation.docFee)],
-      [{ content: 'Gross Capitalized Cost: The agreed upon value plus items you pay over the lease term', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }, { content: '= ' + formatCurrency(calculation.grossCapCost), styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }],
-      ['Capitalized Cost Reduction: Net trade-in, rebate, or cash that reduces gross cap cost', '- ' + formatCurrency(calculation.capCostReduction)],
-      [{ content: 'Adjusted Capitalized Cost: Amount used in calculating your base payment', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }, { content: '= ' + formatCurrency(calculation.adjustedCapCost), styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }],
-      ['Residual Value: The value of the vehicle at the end of the lease', '- ' + formatCurrency(calculation.residualValue)],
-      ['Depreciation: The amount charged for the vehicle\'s decline in value', '= ' + formatCurrency(calculation.depreciation)],
-      ['Rent Charge: The amount charged in addition to the depreciation', '+ ' + formatCurrency(calculation.rentCharge)],
-      [{ content: 'Total of Base Payments: The depreciation plus the rent charge', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }, { content: '= ' + formatCurrency(calculation.totalBasePayments), styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }],
+      [{ content: 'Gross Capitalized Cost', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }, { content: '= ' + formatCurrency(calculation.grossCapCost), styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }],
+      ['Capitalized Cost Reduction', '- ' + formatCurrency(calculation.capCostReduction)],
+      [{ content: 'Adjusted Capitalized Cost', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }, { content: '= ' + formatCurrency(calculation.adjustedCapCost), styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }],
+      ['Residual Value', '- ' + formatCurrency(calculation.residualValue)],
+      ['Depreciation', '= ' + formatCurrency(calculation.depreciation)],
+      ['Rent Charge', '+ ' + formatCurrency(calculation.rentCharge)],
+      [{ content: 'Total of Base Payments', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }, { content: '= ' + formatCurrency(calculation.totalBasePayments), styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }],
       ['Number of Payments', '÷ ' + calculation.numberOfPayments + ' payments'],
       ['Base Payment', '= ' + formatCurrency(calculation.basePayment)],
       [`Sales/Use Tax Per Payment (${(calculation.taxRate * 100).toFixed(2)}%)`, '+ ' + formatCurrency(calculation.taxPerPayment)],
       [{ content: `TOTAL ${frequencyLabel.toUpperCase()} PAYMENT`, styles: { fontStyle: 'bold', fillColor: [200, 220, 240] } }, { content: '= ' + formatCurrency(calculation.totalPayment), styles: { fontStyle: 'bold', fillColor: [200, 220, 240] } }],
     ],
     theme: 'grid',
-    bodyStyles: { fontSize: 9, cellPadding: 4 },
-    columnStyles: { 0: { cellWidth: contentWidth - 120 }, 1: { cellWidth: 120, halign: 'right' } },
+    bodyStyles: { fontSize: 8, cellPadding: 3 },
+    columnStyles: { 0: { cellWidth: contentWidth - 100 }, 1: { cellWidth: 100, halign: 'right' } },
     margin: { left: margin, right: margin },
   });
-  y = (doc as any).lastAutoTable.finalY;
+  y = (doc as any).lastAutoTable.finalY + 15;
 
-  // ==================== PAGE 2: OTHER DISCLOSURES ====================
-  doc.addPage();
-  y = margin;
+  // ==================== OTHER DISCLOSURES (flows naturally) ====================
+
+  // Check if we need a new page, but don't force one
+  checkPage(200);
 
   // Header
   doc.setFillColor(220, 220, 220);
-  doc.rect(margin, y, contentWidth, 18, 'F');
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text('OTHER IMPORTANT DISCLOSURES', pageWidth / 2, y + 13, { align: 'center' });
-  y += 30;
-
-  // Early Termination
-  doc.setFillColor(255, 240, 220);
-  doc.rect(margin, y, contentWidth, 16, 'F');
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text('EARLY TERMINATION', margin + 5, y + 12);
-  y += 25;
-
+  doc.rect(margin, y, contentWidth, 14, 'F');
   doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.text('If you terminate this lease early or default, the following applies:', margin, y);
-  y += 15;
-
   doc.setFont('helvetica', 'bold');
-  doc.text('1. AMOUNT OWED: ', margin, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`All remaining Base Payments plus Disposition Fee (${formatCurrency(DISPOSITION_FEE)}).`, margin + 85, y);
-  y += 12;
-
-  doc.setFont('helvetica', 'bold');
-  doc.text('2. VEHICLE DISPOSITION: ', margin, y);
-  doc.setFont('helvetica', 'normal');
-  const dispText = 'The vehicle will be sold in a commercially reasonable manner. You will be notified of the sale.';
-  doc.text(dispText, margin + 115, y);
-  y += 12;
-
-  doc.setFont('helvetica', 'bold');
-  doc.text('3. LESSOR MAY PURCHASE: ', margin, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Lessor or its affiliates may bid on and purchase the vehicle at any sale.', margin + 130, y);
-  y += 12;
-
-  doc.setFont('helvetica', 'bold');
-  doc.text('4. APPLICATION OF PROCEEDS: ', margin, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Net sale proceeds will be applied to reduce the amount you owe.', margin + 145, y);
-  y += 12;
-
-  doc.setFont('helvetica', 'bold');
-  doc.text('5. DEFICIENCY BALANCE: ', margin, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text('You are responsible for any deficiency (amount owed minus net sale proceeds).', margin + 120, y);
+  doc.text('OTHER IMPORTANT DISCLOSURES', pageWidth / 2, y + 10, { align: 'center' });
   y += 20;
 
-  // Early Termination Formula
-  doc.setFont('helvetica', 'bold');
-  doc.text('EARLY TERMINATION FORMULA:', margin, y);
+  // Early Termination
+  addSectionHeader('EARLY TERMINATION', [255, 240, 220]);
+
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.text('If you terminate this lease early or default, the following applies:', margin, y);
   y += 12;
+
+  const termPoints = [
+    ['1. AMOUNT OWED:', `All remaining Base Payments plus Disposition Fee (${formatCurrency(DISPOSITION_FEE)}).`],
+    ['2. VEHICLE DISPOSITION:', 'The vehicle will be sold in a commercially reasonable manner.'],
+    ['3. LESSOR MAY PURCHASE:', 'Lessor or its affiliates may bid on and purchase the vehicle at any sale.'],
+    ['4. APPLICATION OF PROCEEDS:', 'Net sale proceeds will be applied to reduce the amount you owe.'],
+    ['5. DEFICIENCY BALANCE:', 'You are responsible for any deficiency (amount owed minus net sale proceeds).'],
+  ];
+
+  for (const [label, text] of termPoints) {
+    checkPage(15);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text(label, margin, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(text, margin + 110, y);
+    y += 11;
+  }
+  y += 5;
+
+  // Early Termination Formula
+  checkPage(50);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.text('EARLY TERMINATION FORMULA:', margin, y);
+  y += 10;
 
   doc.setFillColor(245, 245, 245);
-  doc.rect(margin, y, contentWidth, 28, 'F');
+  doc.rect(margin, y, contentWidth, 24, 'F');
   doc.setFont('courier', 'normal');
-  doc.setFontSize(9);
-  doc.text(`  Amount Owed = (Remaining Payments × ${formatCurrency(calculation.basePayment)}) + ${formatCurrency(DISPOSITION_FEE)}`, margin + 5, y + 10);
-  doc.text('  Deficiency  = Amount Owed - Net Vehicle Sale Proceeds', margin + 5, y + 22);
-  y += 38;
+  doc.setFontSize(8);
+  doc.text(`  Amount Owed = (Remaining Payments × ${formatCurrency(calculation.basePayment)}) + ${formatCurrency(DISPOSITION_FEE)}`, margin + 5, y + 9);
+  doc.text('  Deficiency  = Amount Owed - Net Vehicle Sale Proceeds', margin + 5, y + 18);
+  y += 30;
 
   // Early Termination Schedule
+  checkPage(120);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
+  doc.setFontSize(8);
   doc.text('EARLY TERMINATION SCHEDULE (Before Vehicle Sale Credit):', margin, y);
-  y += 12;
+  y += 10;
 
   const schedule = generateEarlyTerminationSchedule(calculation);
   const scheduleData = schedule.map(row => [
@@ -310,90 +312,74 @@ export function generateLeasePDF(contractData: ContractData): void {
     head: [['If Terminated After', 'Payments Made', 'Remaining Payments', 'Amount Owed*']],
     body: scheduleData,
     theme: 'grid',
-    headStyles: { fillColor: [220, 220, 220], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8, halign: 'center' },
-    bodyStyles: { fontSize: 8, cellPadding: 3, halign: 'center' },
+    headStyles: { fillColor: [220, 220, 220], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 7, halign: 'center' },
+    bodyStyles: { fontSize: 7, cellPadding: 2, halign: 'center' },
     margin: { left: margin, right: margin },
   });
-  y = (doc as any).lastAutoTable.finalY + 5;
+  y = (doc as any).lastAutoTable.finalY + 3;
 
-  doc.setFontSize(8);
+  doc.setFontSize(7);
   doc.setFont('helvetica', 'italic');
   doc.text('*Amount owed before vehicle sale credit. Does not include past due payments, late fees, or excess charges.', margin, y);
-  y += 20;
+  y += 15;
 
   // Excessive Wear
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text('EXCESSIVE WEAR AND USE', margin, y);
-  y += 12;
+  checkPage(40);
+  addSectionHeader('EXCESSIVE WEAR AND USE');
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text(`You may be charged for excessive wear and for mileage in excess of ${ANNUAL_MILEAGE.toLocaleString()} miles per year`, margin, y);
-  y += 10;
-  doc.text(`at the rate of ${formatCurrency(EXCESS_MILEAGE_RATE)} per mile.`, margin, y);
-  y += 18;
+  doc.setFontSize(8);
+  doc.text(`You may be charged for excessive wear and for mileage in excess of ${ANNUAL_MILEAGE.toLocaleString()} miles per year at the rate of ${formatCurrency(EXCESS_MILEAGE_RATE)} per mile.`, margin, y);
+  y += 15;
 
   // Purchase Option
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text('PURCHASE OPTION AT END OF LEASE TERM', margin, y);
-  y += 12;
+  checkPage(40);
+  addSectionHeader('PURCHASE OPTION AT END OF LEASE TERM');
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text(`You have an option to purchase the vehicle at the end of the lease for the Residual Value of ${formatCurrency(calculation.residualValue)}`, margin, y);
-  y += 10;
-  doc.text(`plus a Purchase Option Fee of ${formatCurrency(PURCHASE_OPTION_FEE)}, for a total purchase price of ${formatCurrency(calculation.purchaseOptionPrice)}.`, margin, y);
-  y += 18;
+  doc.setFontSize(8);
+  doc.text(`You have an option to purchase the vehicle at the end of the lease for the Residual Value of ${formatCurrency(calculation.residualValue)} plus a Purchase Option Fee of ${formatCurrency(PURCHASE_OPTION_FEE)}, for a total purchase price of ${formatCurrency(calculation.purchaseOptionPrice)}.`, margin, y, { maxWidth: contentWidth });
+  y += 20;
 
   // Late Payment
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text('LATE PAYMENT CHARGE', margin, y);
-  y += 12;
+  checkPage(40);
+  addSectionHeader('LATE PAYMENT CHARGE');
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text(`If any payment is not received within 5 days after its due date, you agree to pay a late charge of ${(LATE_FEE_PERCENT * 100)}%`, margin, y);
-  y += 10;
-  doc.text(`of the payment amount or ${formatCurrency(LATE_FEE_MIN)}, whichever is greater.`, margin, y);
-  y += 18;
+  doc.setFontSize(8);
+  doc.text(`If any payment is not received within 5 days after its due date, you agree to pay a late charge of ${(LATE_FEE_PERCENT * 100)}% of the payment amount or ${formatCurrency(LATE_FEE_MIN)}, whichever is greater.`, margin, y, { maxWidth: contentWidth });
+  y += 20;
 
   // Disposition Fee
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text('DISPOSITION FEE', margin, y);
-  y += 12;
+  checkPage(40);
+  addSectionHeader('DISPOSITION FEE');
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(8);
   doc.text(`If you do not purchase the vehicle at the end of the lease, a disposition fee of ${formatCurrency(DISPOSITION_FEE)} will be due.`, margin, y);
-  y += 18;
+  y += 15;
 
   // Insurance
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text('INSURANCE REQUIREMENTS', margin, y);
-  y += 12;
+  checkPage(60);
+  addSectionHeader('INSURANCE REQUIREMENTS');
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(8);
   doc.text('You (Lessee) agree to maintain the following insurance:', margin, y);
-  y += 12;
-  doc.text('• Liability: Minimum $100,000/$300,000 Bodily Injury, $50,000 Property Damage', margin + 15, y);
   y += 10;
-  doc.text('• Comprehensive and Collision: Actual cash value with maximum $500 deductible', margin + 15, y);
-  y += 10;
-  doc.text('• Lessor must be named as Loss Payee', margin + 15, y);
-  y += 10;
+  doc.text('• Liability: Minimum $100,000/$300,000 Bodily Injury, $50,000 Property Damage', margin + 10, y);
+  y += 9;
+  doc.text('• Comprehensive and Collision: Actual cash value with maximum $500 deductible', margin + 10, y);
+  y += 9;
+  doc.text('• Lessor must be named as Loss Payee', margin + 10, y);
+  y += 15;
 
-  // ==================== PAGE 3: TERMS ====================
-  doc.addPage();
-  y = margin;
+  // ==================== TERMS AND CONDITIONS ====================
+
+  checkPage(250);
 
   // Header
   doc.setFillColor(220, 220, 220);
-  doc.rect(margin, y, contentWidth, 18, 'F');
-  doc.setFontSize(11);
+  doc.rect(margin, y, contentWidth, 14, 'F');
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
-  doc.text('LEASE AGREEMENT TERMS AND CONDITIONS', pageWidth / 2, y + 13, { align: 'center' });
-  y += 30;
+  doc.text('LEASE AGREEMENT TERMS AND CONDITIONS', pageWidth / 2, y + 10, { align: 'center' });
+  y += 20;
 
   const terms = [
     {
@@ -430,94 +416,96 @@ export function generateLeasePDF(contractData: ContractData): void {
     }
   ];
 
-  doc.setFontSize(9);
+  doc.setFontSize(8);
   for (const term of terms) {
-    checkPage(50);
+    const lines = doc.splitTextToSize(term.text, contentWidth);
+    checkPage(12 + lines.length * 9);
     doc.setFont('helvetica', 'bold');
     doc.text(term.title, margin, y);
-    y += 12;
+    y += 10;
     doc.setFont('helvetica', 'normal');
-    const lines = doc.splitTextToSize(term.text, contentWidth);
     doc.text(lines, margin, y);
-    y += lines.length * 10 + 10;
+    y += lines.length * 9 + 8;
   }
 
-  // ==================== PAGE 4: SIGNATURES ====================
-  doc.addPage();
-  y = margin;
+  // ==================== SIGNATURES ====================
+
+  checkPage(180);
 
   // Header
   doc.setFillColor(220, 220, 220);
-  doc.rect(margin, y, contentWidth, 18, 'F');
-  doc.setFontSize(12);
+  doc.rect(margin, y, contentWidth, 14, 'F');
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text('SIGNATURES', pageWidth / 2, y + 13, { align: 'center' });
-  y += 30;
+  doc.text('SIGNATURES', pageWidth / 2, y + 10, { align: 'center' });
+  y += 22;
 
   // Notice
   doc.setFillColor(255, 248, 220);
-  doc.rect(margin, y, contentWidth, 30, 'F');
-  doc.setFontSize(9);
+  doc.rect(margin, y, contentWidth, 24, 'F');
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
-  doc.text('NOTICE: (1) Do not sign this Lease before you read it or if it contains any blank spaces.', margin + 5, y + 12);
-  doc.text('(2) You are entitled to an exact copy of the Lease you sign.', margin + 5, y + 24);
-  y += 40;
+  doc.text('NOTICE: (1) Do not sign this Lease before you read it or if it contains any blank spaces.', margin + 5, y + 9);
+  doc.text('(2) You are entitled to an exact copy of the Lease you sign.', margin + 5, y + 18);
+  y += 30;
 
   // Lessee Acknowledgment
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
   doc.text('LESSEE ACKNOWLEDGMENT', margin, y);
-  y += 15;
+  y += 12;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(8);
   const ackText = 'By signing below, I/we acknowledge that I/we have read this entire Lease Agreement. I/we understand and agree to all terms. I/we acknowledge receiving a completed copy of this Lease Agreement.';
   const ackLines = doc.splitTextToSize(ackText, contentWidth);
   doc.text(ackLines, margin, y);
-  y += ackLines.length * 10 + 20;
+  y += ackLines.length * 9 + 15;
 
   // Signature lines - Lessee
   doc.text('________________________________________', margin, y);
   doc.text('________________________________________', margin + 280, y);
-  y += 12;
-  doc.setFontSize(8);
+  y += 10;
+  doc.setFontSize(7);
   doc.text('Lessee Signature                                        Date', margin, y);
   doc.text('Co-Lessee Signature                                   Date', margin + 280, y);
-  y += 35;
+  y += 25;
 
   // Lessor Acceptance
-  doc.setFontSize(10);
+  checkPage(80);
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
   doc.text('LESSOR ACCEPTANCE', margin, y);
-  y += 15;
+  y += 12;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(8);
   doc.text('By signing below, the Lessor agrees to lease the Vehicle to the Lessee(s) according to the terms of this Lease Agreement.', margin, y);
-  y += 25;
+  y += 18;
 
   // Signature lines - Lessor
   doc.text('________________________________________', margin, y);
   doc.text('________________________________________', margin + 280, y);
-  y += 12;
-  doc.setFontSize(8);
+  y += 10;
+  doc.setFontSize(7);
   doc.text('Authorized Representative                            Date', margin, y);
   doc.text('Print Name and Title', margin + 280, y);
-  y += 35;
-
-  // Assignment
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text('ASSIGNMENT (if applicable)', margin, y);
-  y += 15;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text('Assignee Name: _______________________________________________', margin, y);
-  y += 15;
-  doc.text('Address: _______________________________________________', margin, y);
   y += 25;
 
-  doc.text('________________________________________', margin, y);
+  // Assignment
+  checkPage(70);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text('ASSIGNMENT (if applicable)', margin, y);
   y += 12;
+  doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
+  doc.text('Assignee Name: _______________________________________________', margin, y);
+  y += 12;
+  doc.text('Address: _______________________________________________', margin, y);
+  y += 18;
+
+  doc.text('________________________________________', margin, y);
+  y += 10;
+  doc.setFontSize(7);
   doc.text('Assignee Signature                                       Date', margin, y);
 
   // Save the document
