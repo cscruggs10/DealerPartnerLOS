@@ -59,6 +59,7 @@ export interface ContractData {
   vehicle: VehicleState;
   customer: CustomerState;
   firstPaymentDate: string;
+  dealerProfile?: { name: string; address: string };
 }
 
 const STATES: { value: SupportedState; label: string }[] = [
@@ -279,6 +280,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
         vehicle,
         customer,
         firstPaymentDate: firstPaymentDate.formattedDate,
+        dealerProfile,
       };
       await downloadLeasePDF(contractData);
     } catch (error) {

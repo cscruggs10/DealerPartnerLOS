@@ -43,7 +43,7 @@ function getFrequencyText(frequency: string): string {
 // ============================================================================
 
 export function generateLeasePDF(contractData: ContractData): void {
-  const { calculation, vehicle, customer, firstPaymentDate } = contractData;
+  const { calculation, vehicle, customer, firstPaymentDate, dealerProfile } = contractData;
 
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -102,11 +102,14 @@ export function generateLeasePDF(contractData: ContractData): void {
   y += 18;
 
   // Lessor/Lessee Box
+  const lessorName = dealerProfile?.name || 'Car World Leasing';
+  const lessorAddress = dealerProfile?.address || '[Address]\n[City, State ZIP]';
+
   autoTable(doc, {
     startY: y,
     head: [['LESSOR', 'LESSEE']],
     body: [[
-      'Car World Leasing\n[Address]\n[City, State ZIP]',
+      `${lessorName}\n${lessorAddress}`,
       `Name: ${customer.lesseeName || '_______________________'}\nAddress: ${customer.lesseeAddress || '_______________________'}\nCity/State/ZIP: ${customer.lesseeCity || '___________'}, ${customer.lesseeState || '____'} ${customer.lesseeZip || '_______'}\nPhone: ${customer.lesseePhone || '___________________'}`
     ]],
     theme: 'grid',
