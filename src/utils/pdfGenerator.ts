@@ -493,23 +493,103 @@ export function generateLeasePDF(contractData: ContractData): void {
   doc.text('Print Name and Title', margin + 280, y);
   y += 25;
 
-  // Assignment
-  checkPage(70);
-  doc.setFontSize(9);
+  // ==================== ASSIGNMENT SECTION ====================
+
+  checkPage(280);
+
+  // Assignment Header
+  doc.setFillColor(220, 220, 220);
+  doc.rect(margin, y, contentWidth, 14, 'F');
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text('ASSIGNMENT (if applicable)', margin, y);
+  doc.text('ASSIGNMENT OF LEASE (Full Assignment Without Recourse)', pageWidth / 2, y + 10, { align: 'center' });
+  y += 22;
+
+  // Assignment Introduction
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  const assignmentIntro = 'For good and valuable consideration, the undersigned Lessor (Assignor) hereby sells, assigns, transfers, and conveys to the Assignee named below, WITHOUT RECOURSE, all right, title, and interest in and to this Lease Agreement, the Vehicle described herein, all monies due or to become due under this Lease, all security interests and liens in the Vehicle, and all rights to enforce this Lease and collect payments thereunder.';
+  const introLines = doc.splitTextToSize(assignmentIntro, contentWidth);
+  doc.text(introLines, margin, y);
+  y += introLines.length * 9 + 8;
+
+  // Without Recourse Notice
+  doc.setFillColor(255, 248, 220);
+  doc.rect(margin, y, contentWidth, 32, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.text('WITHOUT RECOURSE NOTICE:', margin + 5, y + 10);
+  doc.setFont('helvetica', 'normal');
+  const recourseText = 'This assignment is made WITHOUT RECOURSE to Assignor. Assignee assumes all risk of collection and performance. Assignor shall have no liability for Lessee\'s failure to pay, default, deficiency balances, or the condition/value of the Vehicle.';
+  const recourseLines = doc.splitTextToSize(recourseText, contentWidth - 10);
+  doc.text(recourseLines, margin + 5, y + 20);
+  y += 40;
+
+  // Assignee Information (Pre-filled)
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text('ASSIGNEE:', margin, y);
   y += 12;
+
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text('Assignee Name: _______________________________________________', margin, y);
-  y += 12;
-  doc.text('Address: _______________________________________________', margin, y);
+  doc.text('I Finance LLC', margin + 10, y);
+  y += 10;
+  doc.text('6440 Winchester Rd', margin + 10, y);
+  y += 10;
+  doc.text('Memphis, TN 38115', margin + 10, y);
   y += 18;
 
+  // Assignor Signature Block
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text('ASSIGNOR (Dealer/Lessor) ACKNOWLEDGMENT:', margin, y);
+  y += 12;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text('By signing below, Assignor represents and warrants that: (1) the Lease is genuine, valid, and enforceable; (2) Assignor has', margin, y);
+  y += 9;
+  doc.text('good title to the Lease and Vehicle free of liens; (3) all information provided regarding the Lessee is true and accurate;', margin, y);
+  y += 9;
+  doc.text('(4) the Lease has been duly executed by Lessee; and (5) Assignor has full authority to execute this Assignment.', margin, y);
+  y += 18;
+
+  // Signature lines
+  doc.text('Dealer Name: ' + (dealerProfile?.name || '___________________________________'), margin, y);
+  y += 15;
+
   doc.text('________________________________________', margin, y);
+  doc.text('________________', margin + 300, y);
   y += 10;
   doc.setFontSize(7);
-  doc.text('Assignee Signature                                       Date', margin, y);
+  doc.text('Authorized Representative Signature', margin, y);
+  doc.text('Date', margin + 300, y);
+  y += 15;
+
+  doc.setFontSize(8);
+  doc.text('Print Name: ________________________________', margin, y);
+  doc.text('Title: _______________________', margin + 280, y);
+  y += 20;
+
+  // Assignee Acceptance
+  checkPage(80);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text('ASSIGNEE ACCEPTANCE:', margin, y);
+  y += 12;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text('By signing below, Assignee accepts assignment of this Lease and Vehicle under the terms stated above.', margin, y);
+  y += 15;
+
+  doc.text('________________________________________', margin, y);
+  doc.text('________________', margin + 300, y);
+  y += 10;
+  doc.setFontSize(7);
+  doc.text('I Finance LLC - Authorized Representative', margin, y);
+  doc.text('Date', margin + 300, y);
 
   // Save the document
   doc.save('Lease_Contract.pdf');

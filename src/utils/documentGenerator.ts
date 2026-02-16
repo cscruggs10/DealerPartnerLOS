@@ -1181,25 +1181,128 @@ function createSignatures(): Paragraph[] {
     subHeading('Lessor\'s Acceptance.'),
     bodyText('By signing below, the Lessor agrees to the terms and conditions of this Lease Agreement.'),
     bodyText('Inspection of the lessee\'s driver\'s license. The Lessor carefully examined the driver\'s licenses of each Lessee and meticulously compared and confirmed the signature on each license with a signature provided by each Lessee, all done in the presence of the Lessor. The Lessor has the belief that each Lessee who provides such information is presently licensed to drive by the state of their residence.'),
-    bodyText('Task. The Lessor transfers this Lease and all rights and ownership of the Vehicle to the Assignee mentioned below (if applicable). This assignment is contingent upon any distinct Assignment Agreement between the Lessor and Assignee.'),
     new Paragraph({
       children: [
-        new TextRun({ text: 'Assignee Name: ', bold: true }),
-        new TextRun({ text: '_______________________________________________' }),
+        new TextRun({ text: '________________________________________  ' }),
+        new TextRun({ text: '________________' }),
+      ],
+      spacing: { before: 200 },
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: 'Lessor Authorized Representative                              Date' })],
+    }),
+    new Paragraph({
+      children: [
+        new TextRun({ text: 'Print Name: ________________________________  ' }),
+        new TextRun({ text: 'Title: ________________________' }),
+      ],
+      spacing: { before: 100 },
+    }),
+  ];
+}
+
+function createAssignmentSection(): Paragraph[] {
+  return [
+    new Paragraph({ children: [new PageBreak()] }),
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: 'ASSIGNMENT OF LEASE',
+          bold: true,
+          size: 28,
+        }),
+      ],
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 50 },
+    }),
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: '(Full Assignment Without Recourse)',
+          bold: true,
+          size: 22,
+        }),
+      ],
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 200 },
+    }),
+    bodyText('For good and valuable consideration, the receipt and sufficiency of which are hereby acknowledged, the undersigned Lessor ("Assignor") hereby sells, assigns, transfers, and conveys to the Assignee named below, WITHOUT RECOURSE, all of Assignor\'s right, title, and interest in and to:'),
+    new Paragraph({
+      children: [new TextRun({ text: '(a) This Motor Vehicle Lease Agreement ("Lease") and all rights thereunder;', size: 20 })],
+      spacing: { before: 50, after: 50 },
+      indent: { left: convertInchesToTwip(0.5) },
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: '(b) The Vehicle described in this Lease, including certificate of title;', size: 20 })],
+      spacing: { after: 50 },
+      indent: { left: convertInchesToTwip(0.5) },
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: '(c) All monies due or to become due under this Lease;', size: 20 })],
+      spacing: { after: 50 },
+      indent: { left: convertInchesToTwip(0.5) },
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: '(d) All security interests and liens in the Vehicle;', size: 20 })],
+      spacing: { after: 50 },
+      indent: { left: convertInchesToTwip(0.5) },
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: '(e) All rights to enforce this Lease and collect payments thereunder;', size: 20 })],
+      spacing: { after: 50 },
+      indent: { left: convertInchesToTwip(0.5) },
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: '(f) All insurance proceeds and other benefits relating to the Vehicle or Lease;', size: 20 })],
+      spacing: { after: 50 },
+      indent: { left: convertInchesToTwip(0.5) },
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: '(g) All claims and rights of action arising from this Lease.', size: 20 })],
+      spacing: { after: 150 },
+      indent: { left: convertInchesToTwip(0.5) },
+    }),
+    subHeading('WITHOUT RECOURSE NOTICE'),
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: 'This assignment is made WITHOUT RECOURSE to Assignor. Assignee assumes all risk of collection and performance under the Lease. Assignor shall have no liability to Assignee for: (a) Lessee\'s failure to make payments when due; (b) Lessee\'s default under any term of the Lease; (c) Any deficiency balance upon early termination or repossession; (d) The condition, value, or marketability of the Vehicle; (e) Any claims by Lessee or third parties relating to the Vehicle or Lease.',
+          size: 20,
+        }),
+      ],
+      spacing: { after: 150 },
+    }),
+    subHeading('ASSIGNOR REPRESENTATIONS AND WARRANTIES'),
+    bodyText('Assignor represents and warrants to Assignee that: (1) The Lease is genuine, valid, and enforceable according to its terms; (2) Assignor has good and marketable title to the Lease and Vehicle, free of all liens and encumbrances except as disclosed; (3) Assignor has full power and authority to execute this Assignment; (4) All information provided to Assignee regarding the Lessee and Lease is true, accurate, and complete; (5) The Lease has been duly executed and delivered by Lessee; (6) To Assignor\'s knowledge, there are no defenses, offsets, or counterclaims against the Lease.'),
+    subHeading('ASSIGNEE INFORMATION'),
+    new Paragraph({
+      children: [
+        new TextRun({ text: 'Assignee Name: ', bold: true, size: 20 }),
+        new TextRun({ text: 'I Finance LLC', size: 20 }),
       ],
       spacing: { before: 100 },
     }),
     new Paragraph({
       children: [
-        new TextRun({ text: 'Address: ', bold: true }),
-        new TextRun({ text: '______________________________________________________' }),
+        new TextRun({ text: 'Address: ', bold: true, size: 20 }),
+        new TextRun({ text: '6440 Winchester Rd', size: 20 }),
       ],
     }),
     new Paragraph({
       children: [
-        new TextRun({ text: 'Phone: ', bold: true }),
-        new TextRun({ text: '________________________________________________________' }),
+        new TextRun({ text: 'City/State/ZIP: ', bold: true, size: 20 }),
+        new TextRun({ text: 'Memphis, TN 38115', size: 20 }),
       ],
+      spacing: { after: 150 },
+    }),
+    subHeading('ASSIGNOR (DEALER/LESSOR) SIGNATURE'),
+    bodyText('By signing below, Assignor certifies that all representations and warranties above are true and correct, and hereby assigns all rights in this Lease and Vehicle to Assignee.'),
+    new Paragraph({
+      children: [
+        new TextRun({ text: 'Dealer Name: ', bold: true, size: 20 }),
+        new TextRun({ text: '_______________________________________________', size: 20 }),
+      ],
+      spacing: { before: 100 },
     }),
     new Paragraph({
       children: [
@@ -1209,7 +1312,33 @@ function createSignatures(): Paragraph[] {
       spacing: { before: 200 },
     }),
     new Paragraph({
-      children: [new TextRun({ text: 'Assignee Name                                                        Date' })],
+      children: [new TextRun({ text: 'Authorized Representative Signature                           Date', size: 18 })],
+    }),
+    new Paragraph({
+      children: [
+        new TextRun({ text: 'Print Name: ________________________________  ' }),
+        new TextRun({ text: 'Title: ________________________' }),
+      ],
+      spacing: { before: 100, after: 150 },
+    }),
+    subHeading('ASSIGNEE ACCEPTANCE'),
+    bodyText('By signing below, Assignee accepts assignment of this Lease and Vehicle under the terms stated above.'),
+    new Paragraph({
+      children: [
+        new TextRun({ text: '________________________________________  ' }),
+        new TextRun({ text: '________________' }),
+      ],
+      spacing: { before: 200 },
+    }),
+    new Paragraph({
+      children: [new TextRun({ text: 'I Finance LLC - Authorized Representative                    Date', size: 18 })],
+    }),
+    new Paragraph({
+      children: [
+        new TextRun({ text: 'Print Name: ________________________________  ' }),
+        new TextRun({ text: 'Title: ________________________' }),
+      ],
+      spacing: { before: 100 },
     }),
   ];
 }
@@ -1330,6 +1459,9 @@ export function generateLeaseDocument(data: LeaseDocumentData): Document {
 
           // Signatures
           ...createSignatures(),
+
+          // Assignment Section
+          ...createAssignmentSection(),
         ],
       },
     ],
