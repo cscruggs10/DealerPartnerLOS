@@ -159,6 +159,18 @@ export function AdminDashboard({ onBackdateDeal }: AdminDashboardProps = {}) {
     }
   }
 
+  // Helper to convert base64 data URL to Uint8Array
+  const base64ToUint8Array = (dataUrl: string): Uint8Array => {
+    // Remove data URL prefix if present (e.g., "data:application/pdf;base64,")
+    const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl
+    const binaryString = atob(base64)
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i)
+    }
+    return bytes
+  }
+
   const handleDownloadAllDocuments = async (lease: LeaseData) => {
     if (!lease.documents || lease.documents.length === 0) {
       alert('No documents to download')
@@ -175,24 +187,27 @@ export function AdminDashboard({ onBackdateDeal }: AdminDashboardProps = {}) {
       for (const doc of lease.documents) {
         try {
           const fileData = await getDocumentFile(doc.id)
-          // Extract base64 data (remove data URL prefix if present)
-          let base64Data = fileData.fileData
-          if (base64Data.includes(',')) {
-            base64Data = base64Data.split(',')[1]
-          }
+
+          // Convert base64 data URL to binary data
+          const binaryData = base64ToUint8Array(fileData.fileData)
 
           // Create filename with document type prefix for organization
           const docTypeLabel = DOCUMENT_LABELS[doc.type] || doc.type
           const fileName = `${docTypeLabel.replace(/[^a-zA-Z0-9]/g, '_')}_${doc.fileName}`
 
-          zip.file(fileName, base64Data, { base64: true })
+          // Add as binary data (not base64)
+          zip.file(fileName, binaryData, { binary: true })
         } catch (err) {
           console.error(`Failed to fetch document ${doc.id}:`, err)
         }
       }
 
-      // Generate and download zip
-      const content = await zip.generateAsync({ type: 'blob' })
+      // Generate and download zip with maximum compatibility
+      const content = await zip.generateAsync({
+        type: 'blob',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 }
+      })
       const url = URL.createObjectURL(content)
       const a = document.createElement('a')
       a.href = url
