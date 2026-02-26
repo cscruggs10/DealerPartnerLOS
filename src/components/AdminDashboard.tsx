@@ -1,9 +1,11 @@
 import { useClerk, useUser } from '@clerk/clerk-react'
 import { useState, useEffect } from 'react'
+import JSZip from 'jszip'
 import {
   getLeases,
   updateLeaseStatus,
   downloadDocument,
+  getDocumentFile,
   updateDocumentStatus,
   LeaseData,
   LeaseDocument,
@@ -38,6 +40,7 @@ export function AdminDashboard({ onBackdateDeal }: AdminDashboardProps = {}) {
   const [rejectNote, setRejectNote] = useState('')
   const [previewDoc, setPreviewDoc] = useState<{ url: string; type: string; name: string } | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
+  const [downloadingAll, setDownloadingAll] = useState(false)
 
   useEffect(() => {
     loadLeases()
@@ -153,6 +156,56 @@ export function AdminDashboard({ onBackdateDeal }: AdminDashboardProps = {}) {
       console.error(err)
     } finally {
       setLoadingPreview(false)
+    }
+  }
+
+  const handleDownloadAllDocuments = async (lease: LeaseData) => {
+    if (!lease.documents || lease.documents.length === 0) {
+      alert('No documents to download')
+      return
+    }
+
+    setDownloadingAll(true)
+    try {
+      const zip = new JSZip()
+      const customerName = `${lease.customerFirstName}_${lease.customerLastName}`.replace(/\s+/g, '_')
+      const folderName = `${customerName}_${lease.vehicleYear}_${lease.vehicleMake}_${lease.vehicleModel}`.replace(/\s+/g, '_')
+
+      // Fetch all documents and add to zip
+      for (const doc of lease.documents) {
+        try {
+          const fileData = await getDocumentFile(doc.id)
+          // Extract base64 data (remove data URL prefix if present)
+          let base64Data = fileData.fileData
+          if (base64Data.includes(',')) {
+            base64Data = base64Data.split(',')[1]
+          }
+
+          // Create filename with document type prefix for organization
+          const docTypeLabel = DOCUMENT_LABELS[doc.type] || doc.type
+          const fileName = `${docTypeLabel.replace(/[^a-zA-Z0-9]/g, '_')}_${doc.fileName}`
+
+          zip.file(fileName, base64Data, { base64: true })
+        } catch (err) {
+          console.error(`Failed to fetch document ${doc.id}:`, err)
+        }
+      }
+
+      // Generate and download zip
+      const content = await zip.generateAsync({ type: 'blob' })
+      const url = URL.createObjectURL(content)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${folderName}_Documents.zip`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('Failed to download documents')
+      console.error(err)
+    } finally {
+      setDownloadingAll(false)
     }
   }
 
@@ -317,7 +370,33 @@ export function AdminDashboard({ onBackdateDeal }: AdminDashboardProps = {}) {
 
           {/* Documents */}
           <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">Uploaded Documents</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold text-gray-800">Uploaded Documents</h2>
+              {selectedLease.documents && selectedLease.documents.length > 0 && (
+                <button
+                  onClick={() => handleDownloadAllDocuments(selectedLease)}
+                  disabled={downloadingAll}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 text-sm font-medium"
+                >
+                  {downloadingAll ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Downloading...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Download All ({selectedLease.documents.length})
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
 
             {selectedLease.documents && selectedLease.documents.length > 0 ? (
               <div className="space-y-4">
