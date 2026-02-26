@@ -19,6 +19,7 @@ import {
 } from '../utils/constants';
 import { downloadLeasePDF } from '../utils/pdfGenerator';
 import { downloadAssignmentAgreementPDF } from '../utils/assignmentAgreementGenerator';
+import { downloadGPSDisclosurePDF } from '../utils/gpsDisclosureGenerator';
 import { decodeVIN, type VehicleInfo } from '../utils/vinDecoder';
 import { createLease } from '../services/api';
 import type { ContractData } from './DealCalculator';
@@ -279,7 +280,7 @@ export function BackdatedContractForm({ onBack }: BackdatedContractFormProps) {
     }
   };
 
-  // Generate contract document and assignment agreement
+  // Generate contract document, assignment agreement, and GPS disclosure
   const handleGenerateContract = async () => {
     if (!calculation || !validation?.isValid || !firstPaymentDate || !contractDate) return;
 
@@ -292,11 +293,13 @@ export function BackdatedContractForm({ onBack }: BackdatedContractFormProps) {
         firstPaymentDate: firstPaymentDate.formattedDate,
         contractDate: formattedContractDate || undefined,
       };
-      // Generate both the lease contract and the assignment agreement
+      // Generate the lease contract, assignment agreement, and GPS disclosure
       await downloadLeasePDF(contractData);
       // Small delay to prevent browser blocking multiple downloads
       await new Promise(resolve => setTimeout(resolve, 500));
       downloadAssignmentAgreementPDF(contractData);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      downloadGPSDisclosurePDF(contractData);
     } catch (error) {
       console.error('Failed to generate documents:', error);
       alert('Failed to generate documents. Please try again.');

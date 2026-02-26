@@ -21,7 +21,8 @@ const DOCUMENT_LABELS: Record<DocumentType, string> = {
   INSURANCE: 'Insurance',
   CREDIT_APPLICATION: 'Credit Application',
   CREDIT_REPORT: 'Credit Report',
-  TITLE_APPLICATION: 'Title Application'
+  TITLE_APPLICATION: 'Title Application',
+  GPS_DISCLOSURE: 'GPS Disclosure'
 }
 
 interface AdminDashboardProps {

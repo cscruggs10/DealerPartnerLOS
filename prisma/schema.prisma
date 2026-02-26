@@ -107,6 +107,7 @@ enum DocumentType {
   CREDIT_APPLICATION // Credit app copy
   CREDIT_REPORT     // Credit report copy
   TITLE_APPLICATION // Title app (MS or TN)
+  GPS_DISCLOSURE    // PassTime GPS disclosure agreement
 }
 
 enum DocumentStatus {

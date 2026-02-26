@@ -10,6 +10,7 @@ export type DocumentType =
   | 'CREDIT_APPLICATION'
   | 'CREDIT_REPORT'
   | 'TITLE_APPLICATION'
+  | 'GPS_DISCLOSURE'
 
 export type DocumentStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
 
