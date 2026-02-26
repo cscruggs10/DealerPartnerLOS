@@ -125,7 +125,9 @@ app.post('/api/leases', async (req, res) => {
         vehicleModel: leaseData.vehicleModel,
         vehicleVin: leaseData.vehicleVin,
         vehicleMileage: leaseData.vehicleMileage,
-        dealData: leaseData.dealData
+        dealData: leaseData.dealData,
+        contractDate: leaseData.contractDate ? new Date(leaseData.contractDate) : null,
+        isBackdated: leaseData.isBackdated || false
       }
     })
 

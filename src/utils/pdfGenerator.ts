@@ -43,7 +43,7 @@ function getFrequencyText(frequency: string): string {
 // ============================================================================
 
 export function generateLeasePDF(contractData: ContractData): void {
-  const { calculation, vehicle, customer, firstPaymentDate, dealerProfile } = contractData;
+  const { calculation, vehicle, customer, firstPaymentDate, dealerProfile, contractDate } = contractData;
 
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -60,7 +60,8 @@ export function generateLeasePDF(contractData: ContractData): void {
 
   const frequencyLabel = getFrequencyLabel(calculation.paymentFrequency);
   const frequencyText = getFrequencyText(calculation.paymentFrequency);
-  const today = new Date().toLocaleDateString('en-US');
+  // Use contractDate for backdated deals, otherwise use current date
+  const today = contractDate || new Date().toLocaleDateString('en-US');
 
   // Helper to add page if needed - returns true if new page was added
   const checkPage = (needed: number): boolean => {

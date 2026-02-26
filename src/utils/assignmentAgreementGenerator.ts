@@ -28,7 +28,7 @@ function formatCurrency(value: number): string {
 // ============================================================================
 
 export function generateAssignmentAgreementPDF(contractData: ContractData): void {
-  const { calculation, vehicle, customer, dealerProfile } = contractData;
+  const { calculation, vehicle, customer, dealerProfile, contractDate } = contractData;
 
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -43,7 +43,8 @@ export function generateAssignmentAgreementPDF(contractData: ContractData): void
   const bottomMargin = 50;
   let y = margin;
 
-  const today = new Date().toLocaleDateString('en-US');
+  // Use contractDate for backdated deals, otherwise use current date
+  const today = contractDate || new Date().toLocaleDateString('en-US');
   const dealerName = dealerProfile?.name || '[DEALER NAME]';
   const dealerAddress = dealerProfile?.address || '[DEALER ADDRESS]';
 

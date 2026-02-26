@@ -21,6 +21,7 @@ import { downloadLeasePDF } from '../utils/pdfGenerator';
 import { downloadAssignmentAgreementPDF } from '../utils/assignmentAgreementGenerator';
 import { decodeVIN, type VehicleInfo } from '../utils/vinDecoder';
 import { createLease } from '../services/api';
+import type { ContractData } from './DealCalculator';
 
 interface FormState {
   state: SupportedState;
@@ -56,15 +57,6 @@ interface CustomerState {
   coLesseePhone: string;
 }
 
-export interface ContractData {
-  calculation: DealCalculation;
-  vehicle: VehicleState;
-  customer: CustomerState;
-  firstPaymentDate: string;
-  dealerProfile?: { name: string; address: string };
-  contractDate?: string; // For backdated deals - the official contract date
-}
-
 const STATES: { value: SupportedState; label: string }[] = [
   { value: 'TN', label: 'Tennessee' },
   { value: 'MS', label: 'Mississippi' },
@@ -76,13 +68,16 @@ const FREQUENCIES: { value: PaymentFrequency; label: string }[] = [
   { value: 'monthly', label: 'Monthly' },
 ];
 
-interface DealCalculatorProps {
-  dealerProfile?: { name: string; address: string };
+interface BackdatedContractFormProps {
   onBack?: () => void;
 }
 
-export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = {}) {
+export function BackdatedContractForm({ onBack }: BackdatedContractFormProps) {
   const { user } = useUser();
+
+  // Contract date for backdated deals (required)
+  const [contractDate, setContractDate] = useState<string>('');
+
   const [form, setForm] = useState<FormState>({
     state: 'TN',
     acv: '',
@@ -208,6 +203,18 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
     return { date: firstPayment, formattedDate };
   }, [nextPayDate, form.paymentFrequency]);
 
+  // Format contract date for display
+  const formattedContractDate = useMemo(() => {
+    if (!contractDate) return null;
+    const date = new Date(contractDate + 'T00:00:00');
+    if (isNaN(date.getTime())) return null;
+    return date.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  }, [contractDate]);
+
   const handleInputChange = (field: keyof FormState) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -274,7 +281,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
 
   // Generate contract document and assignment agreement
   const handleGenerateContract = async () => {
-    if (!calculation || !validation?.isValid || !firstPaymentDate) return;
+    if (!calculation || !validation?.isValid || !firstPaymentDate || !contractDate) return;
 
     setIsGenerating(true);
     try {
@@ -283,7 +290,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
         vehicle,
         customer,
         firstPaymentDate: firstPaymentDate.formattedDate,
-        dealerProfile,
+        contractDate: formattedContractDate || undefined,
       };
       // Generate both the lease contract and the assignment agreement
       await downloadLeasePDF(contractData);
@@ -298,9 +305,9 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
     }
   };
 
-  // Save lease to dashboard via API
+  // Save backdated lease to dashboard via API
   const handleSaveLease = async () => {
-    if (!calculation || !validation?.isValid || !user) return;
+    if (!calculation || !validation?.isValid || !user || !contractDate) return;
 
     setIsSaving(true);
     try {
@@ -315,9 +322,6 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
       const coLesseeLastName = coNameParts.length > 1 ? coNameParts.slice(1).join(' ') : undefined;
 
       const lease = await createLease(user.id, {
-        dealerName: dealerProfile?.name,
-        dealerAddress: dealerProfile?.address,
-        dealerPhone: user.primaryPhoneNumber?.phoneNumber,
         customerFirstName,
         customerLastName,
         customerAddress: customer.lesseeAddress,
@@ -336,14 +340,15 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
           calculation,
           vehicle,
           customer,
-          dealerProfile,
           firstPaymentDate: firstPaymentDate?.formattedDate,
         },
+        contractDate: contractDate,
+        isBackdated: true,
       });
 
       setSavedLeaseId(lease.id);
 
-      // Return to dashboard after saving
+      // Return to admin dashboard after saving
       if (onBack) {
         setTimeout(() => onBack(), 500);
       }
@@ -356,17 +361,18 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
   };
 
   const validRange = validation?.validTermRange;
+  const isContractDateValid = !!contractDate;
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-blue-800 text-white py-5 shadow-lg">
+      <header className="bg-amber-700 text-white py-5 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             {onBack && (
               <button
                 onClick={onBack}
-                className="p-2 hover:bg-blue-700 rounded-lg transition-colors"
+                className="p-2 hover:bg-amber-600 rounded-lg transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -374,9 +380,9 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
               </button>
             )}
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold">Deal Machine Lease Calculator</h1>
-              <p className="text-blue-200 text-sm mt-1">
-                {dealerProfile ? dealerProfile.name : 'Dealer Partner Portal'}
+              <h1 className="text-2xl md:text-3xl font-bold">Backdated Contract Entry</h1>
+              <p className="text-amber-200 text-sm mt-1">
+                Admin Tool - Enter deals with past contract dates
               </p>
             </div>
           </div>
@@ -393,13 +399,51 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-6">
+        {/* Contract Date Section - Required for Backdated Deals */}
+        <div className="bg-amber-50 border-2 border-amber-400 rounded-lg shadow-md p-5 mb-6">
+          <h2 className="text-lg font-semibold text-amber-800 mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Contract Date (Required)
+          </h2>
+          <div className="flex items-center gap-4">
+            <div className="flex-1 max-w-xs">
+              <label htmlFor="contractDate" className="block text-sm font-medium text-amber-700 mb-1">
+                Official Contract Date
+              </label>
+              <input
+                id="contractDate"
+                type="date"
+                value={contractDate}
+                onChange={(e) => setContractDate(e.target.value)}
+                className="w-full px-3 py-2 border-2 border-amber-400 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 bg-white"
+                required
+              />
+            </div>
+            {formattedContractDate && (
+              <div className="flex items-center gap-2 text-amber-800">
+                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="font-medium">{formattedContractDate}</span>
+              </div>
+            )}
+          </div>
+          {!isContractDateValid && (
+            <p className="text-amber-700 text-sm mt-2">
+              This date will appear on all generated documents as the official contract date.
+            </p>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Deal & Vehicle Info */}
           <div className="space-y-6">
             {/* Deal Information */}
             <div className="bg-white rounded-lg shadow-md p-5">
               <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 Deal Information
@@ -415,7 +459,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                     id="state"
                     value={form.state}
                     onChange={handleInputChange('state')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white text-gray-900"
                   >
                     {STATES.map((state) => (
                       <option key={state.value} value={state.value}>
@@ -437,7 +481,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                     id="frequency"
                     value={form.paymentFrequency}
                     onChange={handleInputChange('paymentFrequency')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white text-gray-900"
                   >
                     {FREQUENCIES.map((freq) => (
                       <option key={freq.value} value={freq.value}>
@@ -460,7 +504,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                     type="date"
                     value={nextPayDate}
                     onChange={(e) => setNextPayDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900"
                   />
                   {firstPaymentDate && (
                     <p className="text-xs text-green-600 mt-1 font-medium">
@@ -489,7 +533,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                       onChange={handleInputChange('acv')}
                       onBlur={handleCurrencyBlur('acv')}
                       placeholder="0.00"
-                      className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                      className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900"
                     />
                   </div>
                 </div>
@@ -509,7 +553,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                       onChange={handleInputChange('downPayment')}
                       onBlur={handleCurrencyBlur('downPayment')}
                       placeholder="0.00"
-                      className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                      className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900"
                     />
                   </div>
                   <p className="text-xs text-gray-500 mt-1">Goes to Dealer</p>
@@ -530,7 +574,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                       onChange={handleInputChange('paymentReduction')}
                       onBlur={handleCurrencyBlur('paymentReduction')}
                       placeholder="0.00"
-                      className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                      className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900"
                     />
                   </div>
                   <p className="text-xs text-gray-500 mt-1">Goes to i Finance</p>
@@ -551,7 +595,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                       onChange={handleInputChange('docFee')}
                       onBlur={handleCurrencyBlur('docFee')}
                       placeholder="695.00"
-                      className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                      className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900"
                     />
                   </div>
                 </div>
@@ -569,7 +613,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                     value={form.termMonths}
                     onChange={handleInputChange('termMonths')}
                     placeholder="Auto"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900"
                   />
                   {validRange && validRange.min > 0 && (
                     <p className="text-xs text-green-600 mt-1">
@@ -583,7 +627,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
             {/* Vehicle Information */}
             <div className="bg-white rounded-lg shadow-md p-5">
               <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" />
                 </svg>
@@ -603,13 +647,13 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                     value={vehicle.vin}
                     onChange={handleVehicleChange('vin')}
                     placeholder="Enter 17-character VIN"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 uppercase"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 uppercase"
                   />
                   <button
                     type="button"
                     onClick={handleDecodeVin}
                     disabled={isDecodingVin}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 font-medium text-sm"
+                    className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:bg-gray-400 font-medium text-sm"
                   >
                     {isDecodingVin ? 'Decoding...' : 'Decode'}
                   </button>
@@ -695,7 +739,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                     value={vehicle.odometer}
                     onChange={handleVehicleChange('odometer')}
                     placeholder="Enter mileage"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900"
                   />
                 </div>
               </div>
@@ -707,7 +751,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
             {/* Lessee Information */}
             <div className="bg-white rounded-lg shadow-md p-5">
               <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
                 Lessee (Customer)
@@ -724,7 +768,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                     value={customer.lesseeName}
                     onChange={handleCustomerChange('lesseeName')}
                     placeholder="John Doe"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900"
                   />
                 </div>
 
@@ -738,7 +782,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                     value={customer.lesseeAddress}
                     onChange={handleCustomerChange('lesseeAddress')}
                     placeholder="123 Main St"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900"
                   />
                 </div>
 
@@ -752,7 +796,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                       type="text"
                       value={customer.lesseeCity}
                       onChange={handleCustomerChange('lesseeCity')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900"
                     />
                   </div>
                   <div>
@@ -765,7 +809,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                       maxLength={2}
                       value={customer.lesseeState}
                       onChange={handleCustomerChange('lesseeState')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 uppercase"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 uppercase"
                     />
                   </div>
                   <div>
@@ -778,7 +822,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                       maxLength={10}
                       value={customer.lesseeZip}
                       onChange={handleCustomerChange('lesseeZip')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900"
                     />
                   </div>
                 </div>
@@ -793,7 +837,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                     value={customer.lesseePhone}
                     onChange={handleCustomerChange('lesseePhone')}
                     placeholder="(555) 123-4567"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900"
                   />
                 </div>
               </div>
@@ -819,7 +863,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                     value={customer.coLesseeName}
                     onChange={handleCustomerChange('coLesseeName')}
                     placeholder="Jane Doe"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900"
                   />
                 </div>
 
@@ -833,7 +877,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                     value={customer.coLesseeAddress}
                     onChange={handleCustomerChange('coLesseeAddress')}
                     placeholder="123 Main St"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900"
                   />
                 </div>
 
@@ -847,7 +891,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                       type="text"
                       value={customer.coLesseeCity}
                       onChange={handleCustomerChange('coLesseeCity')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900"
                     />
                   </div>
                   <div>
@@ -860,7 +904,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                       maxLength={2}
                       value={customer.coLesseeState}
                       onChange={handleCustomerChange('coLesseeState')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900 uppercase"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900 uppercase"
                     />
                   </div>
                   <div>
@@ -873,7 +917,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                       maxLength={10}
                       value={customer.coLesseeZip}
                       onChange={handleCustomerChange('coLesseeZip')}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900"
                     />
                   </div>
                 </div>
@@ -888,7 +932,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                     value={customer.coLesseePhone}
                     onChange={handleCustomerChange('coLesseePhone')}
                     placeholder="(555) 123-4567"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-gray-900"
                   />
                 </div>
               </div>
@@ -898,13 +942,13 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
             {validation && (
               <div
                 className={`rounded-lg p-4 ${
-                  validation.isValid
+                  validation.isValid && isContractDateValid
                     ? 'bg-green-50 border-2 border-green-400'
                     : 'bg-red-50 border-2 border-red-400'
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  {validation.isValid ? (
+                  {validation.isValid && isContractDateValid ? (
                     <>
                       <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
@@ -920,6 +964,14 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                     </>
                   )}
                 </div>
+                {!isContractDateValid && (
+                  <ul className="mt-2 text-sm text-red-700 space-y-1">
+                    <li className="flex items-start gap-1">
+                      <span className="text-red-500">*</span>
+                      <span>Contract date is required for backdated deals</span>
+                    </li>
+                  </ul>
+                )}
                 {!validation.isValid && (
                   <ul className="mt-2 text-sm text-red-700 space-y-1">
                     {validation.errors.map((error, idx) => (
@@ -952,9 +1004,9 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
             <div className="space-y-3">
               <button
                 onClick={handleGenerateContract}
-                disabled={!validation?.isValid || isGenerating || !firstPaymentDate}
+                disabled={!validation?.isValid || isGenerating || !firstPaymentDate || !isContractDateValid}
                 className={`w-full py-4 px-6 rounded-lg font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-3 ${
-                  validation?.isValid && !isGenerating && firstPaymentDate
+                  validation?.isValid && !isGenerating && firstPaymentDate && isContractDateValid
                     ? 'bg-green-600 hover:bg-green-700 text-white cursor-pointer'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
@@ -977,43 +1029,41 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
                 )}
               </button>
 
-              {onBack && (
-                <button
-                  onClick={handleSaveLease}
-                  disabled={!validation?.isValid || isSaving || savedLeaseId !== null}
-                  className={`w-full py-3 px-6 rounded-lg font-medium transition-all flex items-center justify-center gap-2 ${
-                    validation?.isValid && !isSaving && !savedLeaseId
-                      ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
-                      : savedLeaseId
-                        ? 'bg-green-100 text-green-700 cursor-default'
-                        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  {isSaving ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      Saving...
-                    </>
-                  ) : savedLeaseId ? (
-                    <>
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      Saved to Dashboard
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                      </svg>
-                      Save to Dashboard
-                    </>
-                  )}
-                </button>
-              )}
+              <button
+                onClick={handleSaveLease}
+                disabled={!validation?.isValid || isSaving || savedLeaseId !== null || !isContractDateValid}
+                className={`w-full py-3 px-6 rounded-lg font-medium transition-all flex items-center justify-center gap-2 ${
+                  validation?.isValid && !isSaving && !savedLeaseId && isContractDateValid
+                    ? 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer'
+                    : savedLeaseId
+                      ? 'bg-green-100 text-green-700 cursor-default'
+                      : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {isSaving ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Saving...
+                  </>
+                ) : savedLeaseId ? (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Saved to Dashboard
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                    </svg>
+                    Save Backdated Deal
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
@@ -1040,26 +1090,26 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
             ) : (
               <>
                 {/* Payment Summary */}
-                <div className="bg-blue-800 text-white rounded-lg shadow-lg p-5">
-                  <h3 className="text-sm font-medium text-blue-200 mb-3 uppercase tracking-wide">
+                <div className="bg-amber-700 text-white rounded-lg shadow-lg p-5">
+                  <h3 className="text-sm font-medium text-amber-200 mb-3 uppercase tracking-wide">
                     Payment Summary ({calculation.paymentFrequencyLabel})
                   </h3>
                   <div className="space-y-3">
                     <div className="flex justify-between items-baseline">
-                      <span className="text-blue-200">Base Payment</span>
+                      <span className="text-amber-200">Base Payment</span>
                       <span className="text-2xl font-bold">{formatCurrency(calculation.basePayment)}</span>
                     </div>
                     <div className="flex justify-between items-baseline">
-                      <span className="text-blue-200">Tax ({(calculation.taxRate * 100).toFixed(2)}%)</span>
+                      <span className="text-amber-200">Tax ({(calculation.taxRate * 100).toFixed(2)}%)</span>
                       <span className="text-lg">{formatCurrency(calculation.taxPerPayment)}</span>
                     </div>
-                    <div className="border-t border-blue-600 pt-3">
+                    <div className="border-t border-amber-600 pt-3">
                       <div className="flex justify-between items-baseline">
-                        <span className="text-blue-100 font-medium">TOTAL PAYMENT</span>
+                        <span className="text-amber-100 font-medium">TOTAL PAYMENT</span>
                         <span className="text-3xl font-bold text-white">{formatCurrency(calculation.totalPayment)}</span>
                       </div>
                       <div className="text-center mt-2">
-                        <span className="text-blue-200 text-sm">{calculation.numberOfPayments} {calculation.paymentFrequencyLabel} Payments</span>
+                        <span className="text-amber-200 text-sm">{calculation.numberOfPayments} {calculation.paymentFrequencyLabel} Payments</span>
                       </div>
                     </div>
                   </div>
@@ -1214,7 +1264,7 @@ export function DealCalculator({ dealerProfile, onBack }: DealCalculatorProps = 
       {/* Footer */}
       <footer className="bg-gray-100 border-t mt-8 py-4">
         <div className="max-w-7xl mx-auto px-4 text-center text-xs text-gray-500">
-          Deal Machine Dealer Network powered by i Finance &copy; {new Date().getFullYear()}
+          Deal Machine Dealer Network - Admin Backdated Entry Tool &copy; {new Date().getFullYear()}
         </div>
       </footer>
     </div>

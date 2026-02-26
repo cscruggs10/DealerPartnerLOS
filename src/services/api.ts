@@ -53,6 +53,8 @@ export interface LeaseData {
     firstPaymentDate: string
   }
   documents?: LeaseDocument[]
+  contractDate?: string // Official contract date for backdated deals
+  isBackdated?: boolean // Flag to identify backdated entries
   createdAt: string
   updatedAt: string
   dealer?: {
@@ -105,6 +107,8 @@ export async function createLease(clerkId: string, leaseData: {
   vehicleVin: string
   vehicleMileage: number
   dealData: Record<string, unknown>
+  contractDate?: string // For backdated deals
+  isBackdated?: boolean // Flag for backdated deals
 }): Promise<LeaseData> {
   const response = await fetch(`${API_BASE}/api/leases`, {
     method: 'POST',

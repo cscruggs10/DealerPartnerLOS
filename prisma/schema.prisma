@@ -50,6 +50,10 @@ model Lease {
   // Deal Data (stored as JSON for flexibility)
   dealData           Json
 
+  // Backdated contract fields
+  contractDate       DateTime? // Optional - if set, this is the official contract date (for backdated deals)
+  isBackdated        Boolean   @default(false) // Flag to identify backdated entries
+
   // Verification fields
   customerEmail         String?
   customerEmailVerified Boolean @default(false)

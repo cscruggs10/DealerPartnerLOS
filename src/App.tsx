@@ -4,12 +4,15 @@ import { DealCalculator } from './components/DealCalculator'
 import { Dashboard } from './components/Dashboard'
 import { DealerSetup } from './components/DealerSetup'
 import { AdminDashboard } from './components/AdminDashboard'
+import { BackdatedContractForm } from './components/BackdatedContractForm'
 
 type View = 'dashboard' | 'calculator'
+type AdminView = 'dashboard' | 'backdate'
 
 function App() {
   const { user, isLoaded } = useUser()
   const [currentView, setCurrentView] = useState<View>('dashboard')
+  const [adminView, setAdminView] = useState<AdminView>('dashboard')
   const [dealerProfile, setDealerProfile] = useState<{ name: string; address: string } | null>(null)
 
   // Admin phone numbers (just digits, no formatting)
@@ -58,8 +61,12 @@ function App() {
 
       <SignedIn>
         {isAdmin ? (
-          // Admin users see the Admin Dashboard
-          <AdminDashboard />
+          // Admin users see the Admin Dashboard or Backdate form
+          adminView === 'backdate' ? (
+            <BackdatedContractForm onBack={() => setAdminView('dashboard')} />
+          ) : (
+            <AdminDashboard onBackdateDeal={() => setAdminView('backdate')} />
+          )
         ) : !dealerProfile ? (
           // New dealers need to set up their profile
           <DealerSetup onProfileSaved={handleProfileSaved} />
