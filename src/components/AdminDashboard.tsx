@@ -180,10 +180,11 @@ export function AdminDashboard({ onBackdateDeal }: AdminDashboardProps = {}) {
     setDownloadingAll(true)
     try {
       const zip = new JSZip()
-      const customerName = `${lease.customerFirstName}_${lease.customerLastName}`.replace(/\s+/g, '_')
-      const folderName = `${customerName}_${lease.vehicleYear}_${lease.vehicleMake}_${lease.vehicleModel}`.replace(/\s+/g, '_')
+      const customerName = `${lease.customerFirstName}_${lease.customerLastName}`.replace(/[^a-zA-Z0-9]/g, '_')
+      const folderName = `${customerName}_${lease.vehicleYear}_${lease.vehicleMake}_${lease.vehicleModel}`.replace(/[^a-zA-Z0-9]/g, '_')
 
       // Fetch all documents and add to zip
+      let docIndex = 1
       for (const doc of lease.documents) {
         try {
           const fileData = await getDocumentFile(doc.id)
@@ -191,27 +192,29 @@ export function AdminDashboard({ onBackdateDeal }: AdminDashboardProps = {}) {
           // Convert base64 data URL to binary data
           const binaryData = base64ToUint8Array(fileData.fileData)
 
-          // Create filename with document type prefix for organization
+          // Create simple filename without spaces or special characters (Windows compatible)
           const docTypeLabel = DOCUMENT_LABELS[doc.type] || doc.type
-          const fileName = `${docTypeLabel.replace(/[^a-zA-Z0-9]/g, '_')}_${doc.fileName}`
+          const cleanDocType = docTypeLabel.replace(/[^a-zA-Z0-9]/g, '')
+          const extension = doc.fileName.split('.').pop() || 'pdf'
+          const fileName = `${String(docIndex).padStart(2, '0')}_${cleanDocType}.${extension}`
+          docIndex++
 
-          // Add as binary data (not base64)
+          // Add as binary data
           zip.file(fileName, binaryData, { binary: true })
         } catch (err) {
           console.error(`Failed to fetch document ${doc.id}:`, err)
         }
       }
 
-      // Generate and download zip with maximum compatibility
+      // Generate zip with STORE (no compression) for maximum compatibility
       const content = await zip.generateAsync({
         type: 'blob',
-        compression: 'DEFLATE',
-        compressionOptions: { level: 6 }
+        compression: 'STORE'
       })
       const url = URL.createObjectURL(content)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${folderName}_Documents.zip`
+      a.download = `${folderName}.zip`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
