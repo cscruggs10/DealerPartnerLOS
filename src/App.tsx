@@ -16,7 +16,7 @@ function App() {
   const [dealerProfile, setDealerProfile] = useState<{ name: string; address: string } | null>(null)
 
   // Admin phone numbers (just digits, no formatting)
-  const ADMIN_PHONES = ['9012102381']
+  const ADMIN_PHONES = ['9012102381', '9012385803']
   const userPhone = user?.primaryPhoneNumber?.phoneNumber?.replace(/\D/g, '').slice(-10) || ''
   const isAdmin = ADMIN_PHONES.includes(userPhone)
 
